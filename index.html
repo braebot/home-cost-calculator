@@ -218,6 +218,44 @@ select{
     margin-top:16px;
     font-weight:bold;
 }
+
+/* --- references (sources) --- */
+#refs{
+    margin-top:22px;
+}
+
+details.refs{
+    border-top:1px solid #eee;
+    padding-top:12px;
+}
+
+details.refs summary{
+    cursor:pointer;
+    color:#4f46e5;
+    font-size:.9em;
+    list-style:none;
+}
+
+details.refs summary::-webkit-details-marker{
+    display:none;
+}
+
+details.refs summary::before{
+    content:"▸ ";
+}
+
+details.refs[open] summary::before{
+    content:"▾ ";
+}
+
+details.refs ul{
+    margin:10px 0 4px;
+    line-height:1.6em;
+}
+
+details.refs a{
+    color:#4f46e5;
+}
 </style>
 </head>
 <body>
@@ -250,6 +288,8 @@ Educational tool for custom homes in Gunnison County, Colorado.
 <div id="devSkip">
 <button id="skipBtn" class="linklike">Skip to results with defaults →</button>
 </div>
+
+<div id="refs"></div>
 
 </div>
 
@@ -369,7 +409,12 @@ desc:"Taller ceilings increase the conditioned volume (cubic feet) that must be 
 unit:"ft",
 default:9,
 min:7,
-max:20
+max:20,
+effect:(v)=>{
+  const pct=Math.round((v/BASE_CEILING-1)*100);
+  if(pct===0) return `Baseline ${BASE_CEILING} ft — no change to volume or energy use.`;
+  return `Effect: ${pct>0?"+":"−"}${Math.abs(pct)}% conditioned volume & energy use vs. the ${BASE_CEILING} ft baseline.`;
+}
 },
 
 {
@@ -435,6 +480,9 @@ choices:[
 {label:"Code Minimum", cost:0, carbon:0},
 {label:"Above Code", cost:15000, carbon:-5},
 {label:"High Performance", cost:40000, carbon:-10}
+],
+references:[
+{label:"U.S. Dept. of Energy — Insulation (Energy Saver)", url:"https://www.energy.gov/energysaver/insulation"}
 ]
 },
 
@@ -532,6 +580,7 @@ optionsDiv.innerHTML="";
 nextBtn.disabled=true;
 backBtn.disabled = (current===0);
 document.getElementById("devSkip").style.display = (current===0) ? "block" : "none";
+renderReferences(q);
 
 if(q.type==="choice"){
   renderChoice(q);
@@ -550,7 +599,8 @@ q.choices.forEach((choice,index)=>{
   const div=document.createElement("label");
   div.className="option";
   const checked = (answers[current] && answers[current].index===index) ? "checked" : "";
-  div.innerHTML=`<input type="radio" name="answer" value="${index}" ${checked}> ${choice.label}`;
+  div.innerHTML=`<input type="radio" name="answer" value="${index}" ${checked}> ${choice.label}
+    <span class="room-rate">${choiceImpactLabel(choice)}</span>`;
   div.onclick=()=>{
     answers[current]={type:"choice", index:index, cost:choice.cost, carbon:choice.carbon};
     nextBtn.disabled=false;
@@ -560,24 +610,60 @@ q.choices.forEach((choice,index)=>{
 if(answers[current]) nextBtn.disabled=false;
 }
 
+/* Impact tag shown on each choice: cost and/or carbon delta vs. baseline.
+   Omits whichever is zero; the 0-cost / 0-carbon option is the baseline the
+   other options are measured against, so it is labeled as such. */
+function choiceImpactLabel(choice){
+const parts=[];
+if(choice.cost!==0)   parts.push((choice.cost>0?"+":"−")+"$"+Math.abs(choice.cost).toLocaleString());
+if(choice.carbon!==0) parts.push((choice.carbon>0?"+":"−")+Math.abs(choice.carbon)+" carbon");
+return parts.length ? parts.join(" · ") : "baseline — no added cost or carbon";
+}
+
+/* ---------- references framework ----------
+   Any question can carry a `references` array:
+       references:[
+         {label:"Human-readable source name", url:"https://..."}
+       ]
+   When present, an expandable "Sources & references" section renders at the
+   bottom of that step. To add sources to a step, just drop the array onto its
+   question object above — no other wiring needed. */
+function renderReferences(q){
+const box=document.getElementById("refs");
+box.innerHTML="";
+if(!q.references || !q.references.length) return;
+const items=q.references.map(r=>
+  `<li><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.label}</a></li>`
+).join("");
+box.innerHTML=`
+  <details class="refs">
+    <summary>Sources &amp; references (${q.references.length})</summary>
+    <ul>${items}</ul>
+  </details>`;
+}
+
 /* ---------- numeric question (ceiling height) ---------- */
 function renderNumber(q){
 const saved = (answers[current] && answers[current].value!=null) ? answers[current].value : q.default;
 const wrap=document.createElement("div");
 wrap.innerHTML=`
   <input type="number" id="numInput" value="${saved}" min="${q.min}" max="${q.max}" step="0.5">
-  <span class="small"> ${q.unit}</span>
+  <span class="small"> ${q.unit} &nbsp;(allowed range: ${q.min}–${q.max} ${q.unit})</span>
+  <div class="running-total" id="numEffect"></div>
 `;
 optionsDiv.appendChild(wrap);
 const input=wrap.querySelector("#numInput");
+const effectBox=wrap.querySelector("#numEffect");
 const commit=()=>{
   const v=parseFloat(input.value);
-  if(!isNaN(v) && v>0){
-    answers[current]={type:"number", key:q.key, value:v};
-    nextBtn.disabled=false;
-  }else{
+  if(isNaN(v) || v<q.min || v>q.max){
+    effectBox.innerText=`Enter a value between ${q.min} and ${q.max} ${q.unit}.`;
     nextBtn.disabled=true;
+    return;
   }
+  answers[current]={type:"number", key:q.key, value:v};
+  effectBox.innerText = q.effect ? q.effect(v) : "";
+  nextBtn.disabled=false;
 };
 input.oninput=commit;
 commit();
