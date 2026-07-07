@@ -67,6 +67,37 @@ button{
 
 button:disabled{
     opacity:.5;
+    cursor:default;
+}
+
+.nav{
+    display:flex;
+    gap:10px;
+    margin-top:10px;
+}
+
+button.secondary{
+    background:white;
+    color:#4f46e5;
+    border:1px solid #4f46e5;
+}
+
+#devSkip{
+    margin-top:16px;
+}
+
+button.linklike{
+    background:none;
+    border:none;
+    color:#888;
+    font-size:.85em;
+    padding:4px 0;
+    text-decoration:underline;
+    cursor:pointer;
+}
+
+button.linklike:hover{
+    color:#4f46e5;
 }
 
 .small{
@@ -99,6 +130,94 @@ td,th{
 ul{
     line-height:1.7em;
 }
+
+/* --- sizing branch --- */
+.branch-toggle{
+    display:flex;
+    gap:10px;
+    margin-bottom:18px;
+}
+
+.branch-toggle .tab{
+    flex:1;
+    text-align:center;
+    border:1px solid #ddd;
+    padding:12px;
+    border-radius:8px;
+    cursor:pointer;
+    margin-top:0;
+    background:white;
+    color:#222;
+}
+
+.branch-toggle .tab.active{
+    border-color:#4f46e5;
+    background:#eef0ff;
+    color:#4f46e5;
+    font-weight:bold;
+}
+
+.room-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    border-bottom:1px solid #eee;
+    padding:10px 0;
+    flex-wrap:wrap;
+    gap:8px;
+}
+
+.room-row .room-label{
+    font-weight:bold;
+}
+
+.room-row .room-rate{
+    color:#666;
+    font-size:.9em;
+    font-weight:normal;
+}
+
+.sqft-fields{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0 4px 0;
+}
+
+.sqft-fields .field{
+    display:flex;
+    flex-direction:column;
+    font-size:.8em;
+    color:#666;
+}
+
+input[type="number"]{
+    width:90px;
+    padding:8px;
+    border:1px solid #ccc;
+    border-radius:6px;
+    font-size:1em;
+}
+
+select{
+    padding:8px;
+    border:1px solid #ccc;
+    border-radius:6px;
+    font-size:1em;
+    max-width:100%;
+}
+
+.count-input{
+    width:70px;
+}
+
+.running-total{
+    background:#eef0ff;
+    padding:12px 16px;
+    border-radius:8px;
+    margin-top:16px;
+    font-weight:bold;
+}
 </style>
 </head>
 <body>
@@ -123,7 +242,14 @@ Educational tool for custom homes in Gunnison County, Colorado.
 
 <div id="options"></div>
 
+<div class="nav">
+<button id="backBtn" class="secondary" disabled>Back</button>
 <button id="nextBtn" disabled>Next</button>
+</div>
+
+<div id="devSkip">
+<button id="skipBtn" class="linklike">Skip to results with defaults →</button>
+</div>
 
 </div>
 
@@ -133,9 +259,64 @@ Educational tool for custom homes in Gunnison County, Colorado.
 
 <script>
 
+/* ------------------------------------------------------------------
+   ASSUMPTIONS — per-room-type cost & carbon (PLACEHOLDERS).
+   "Column AC" in the spreadsheet: every room type is a function of
+   square footage. Replace these numbers with real spreadsheet values
+   when available. Kitchen and bathrooms are intentionally the highest
+   $/sq-ft (plumbing, tile, cabinetry, appliances); garage the lowest.
+------------------------------------------------------------------- */
+const ROOM_TYPES = [
+  {key:"bedroom", label:"Bedrooms",             rate:350, carbonPerSqft:0.018, defaultSqft:180},
+  {key:"bathroom",label:"Bathrooms",            rate:600, carbonPerSqft:0.025, defaultSqft:90},
+  {key:"kitchen", label:"Kitchens",             rate:650, carbonPerSqft:0.028, defaultSqft:250},
+  {key:"living",  label:"Living / Family Rooms",rate:300, carbonPerSqft:0.016, defaultSqft:450},
+  {key:"garage",  label:"Garage Bays",          rate:200, carbonPerSqft:0.012, defaultSqft:300},
+  {key:"other",   label:"Other Rooms",          rate:340, carbonPerSqft:0.018, defaultSqft:200}
+];
+
+/* Reference "medium" home. The manual sizing branch measures its cost &
+   carbon RELATIVE to this home, so the result plugs into the same
+   base-cost + delta model the selector branch uses (medium = 0 delta). */
+const REFERENCE_HOME = {bedroom:3, bathroom:3, kitchen:1, living:1, garage:2, other:2};
+
+function referenceTotals(){
+  let cost=0, carbon=0, sqft=0;
+  ROOM_TYPES.forEach(rt=>{
+    const count = REFERENCE_HOME[rt.key] || 0;
+    const area = count * rt.defaultSqft;
+    sqft   += area;
+    cost   += area * rt.rate;
+    carbon += area * rt.carbonPerSqft;
+  });
+  return {cost, carbon, sqft};
+}
+const REF = referenceTotals();
+
+/* Energy assumptions (educational). */
+const BASE_EUI = 12;      // kWh per sq-ft per year, at baseline ceiling height
+const BASE_CEILING = 9;   // ft — baseline ceiling the EUI is calibrated to
+
+/* Contractor (general contractor) fee — overhead + profit margin.
+   Custom homes typically run 15–25% of HARD construction costs (site,
+   structure, systems, finishes) — not land, soft costs, or financing.
+   18% is a reasonable midpoint. */
+const CONTRACTOR_FEE_PCT = 0.18;
+
+/* Location cost multipliers (PLACEHOLDER assumptions). Applied to HARD
+   construction costs only (site, structure, systems, finishes) — never to
+   land, soft costs, or financing. The tool is calibrated to Gunnison County
+   = 1.00. Add-on factors are independent of town and are kept distinct from
+   the "Site Difficulty" question to avoid double-counting. */
+const LOCATION_FACTORS = [
+  {key:"access",    label:"Long-haul / limited site access (material freight)", add:0.05},
+  {key:"elevation", label:"High elevation — snow load & deep frost depth",       add:0.03}
+];
+
 const questions = [
 
 {
+type:"choice",
 title:"Land Cost",
 desc:"Land can be one of the largest contributors to total project cost.",
 choices:[
@@ -146,6 +327,20 @@ choices:[
 },
 
 {
+type:"location",
+title:"Location",
+desc:"Where you build changes construction costs — labor, material delivery, and site logistics all vary by region. This adjusts construction costs only, not land.",
+regions:[
+{key:"gunnison",   label:"Gunnison (town)", mult:1.00},
+{key:"cb",         label:"Crested Butte / Mt. Crested Butte", mult:1.20},
+{key:"remote",     label:"Rural / remote parcel", mult:1.15},
+{key:"frontrange", label:"Front Range / Denver metro", mult:0.92},
+{key:"resort",     label:"Other CO resort (Aspen / Telluride tier)", mult:1.35}
+]
+},
+
+{
+type:"choice",
 title:"Site Difficulty",
 desc:"Slope, access, excavation, and logistics affect cost.",
 choices:[
@@ -156,16 +351,29 @@ choices:[
 },
 
 {
+type:"size",
 title:"Home Size",
-desc:"Often the biggest driver of both cost and carbon.",
+desc:"Often the biggest driver of both cost and carbon. Pick a size, or enter your rooms for a more precise estimate.",
 choices:[
-{label:"Small (<2,000 sq ft)", cost:-250000, carbon:-20},
-{label:"Medium (2,000-3,500 sq ft)", cost:0, carbon:0},
-{label:"Large (3,500+ sq ft)", cost:500000, carbon:35}
+{label:"Small (<2,000 sq ft)", cost:-250000, carbon:-20, repSqft:1500},
+{label:"Medium (2,000-3,500 sq ft)", cost:0, carbon:0, repSqft:2510},
+{label:"Large (3,500+ sq ft)", cost:500000, carbon:35, repSqft:4000}
 ]
 },
 
 {
+type:"number",
+key:"ceiling",
+title:"Ceiling Height",
+desc:"Taller ceilings increase the conditioned volume (cubic feet) that must be heated and cooled.",
+unit:"ft",
+default:9,
+min:7,
+max:20
+},
+
+{
+type:"choice",
 title:"Design Complexity",
 desc:"Complex forms require more design, engineering, and labor.",
 choices:[
@@ -176,6 +384,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"Foundation",
 desc:"Concrete-heavy foundations typically increase embodied carbon.",
 choices:[
@@ -186,6 +395,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"Structure",
 desc:"Structural systems influence materials and carbon.",
 choices:[
@@ -196,6 +406,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"Windows",
 desc:"Windows impact comfort, efficiency, and cost.",
 choices:[
@@ -206,6 +417,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"Roofing",
 desc:"Roofing materials vary significantly in durability and cost.",
 choices:[
@@ -216,6 +428,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"Insulation",
 desc:"Improved insulation can reduce operational energy needs.",
 choices:[
@@ -226,6 +439,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"HVAC",
 desc:"Heating and cooling systems affect comfort and efficiency.",
 choices:[
@@ -236,6 +450,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"Solar",
 desc:"Solar increases upfront cost but can offset operational emissions.",
 choices:[
@@ -246,6 +461,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"Exterior Finishes",
 desc:"Exterior materials vary in durability and embodied carbon.",
 choices:[
@@ -256,6 +472,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"Interior Finishes",
 desc:"A major driver of custom home budgets.",
 choices:[
@@ -266,6 +483,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"Kitchen & Cabinetry",
 desc:"Custom millwork and countertops can be significant cost drivers.",
 choices:[
@@ -276,6 +494,7 @@ choices:[
 },
 
 {
+type:"choice",
 title:"Financing",
 desc:"Financing costs vary by project structure and duration.",
 choices:[
@@ -297,6 +516,7 @@ const qTitle = document.getElementById("questionTitle");
 const qDesc = document.getElementById("questionDescription");
 const optionsDiv = document.getElementById("options");
 const nextBtn = document.getElementById("nextBtn");
+const backBtn = document.getElementById("backBtn");
 
 function renderQuestion(){
 
@@ -305,46 +525,380 @@ const q = questions[current];
 document.getElementById("progress").style.width =
 ((current)/questions.length*100)+"%";
 
-qTitle.innerText =
-`${current+1}. ${q.title}`;
-
-qDesc.innerText =
-q.desc;
+qTitle.innerText = `${current+1}. ${q.title}`;
+qDesc.innerText = q.desc;
 
 optionsDiv.innerHTML="";
 nextBtn.disabled=true;
+backBtn.disabled = (current===0);
+document.getElementById("devSkip").style.display = (current===0) ? "block" : "none";
 
+if(q.type==="choice"){
+  renderChoice(q);
+}else if(q.type==="size"){
+  renderSize(q);
+}else if(q.type==="location"){
+  renderLocation(q);
+}else if(q.type==="number"){
+  renderNumber(q);
+}
+}
+
+/* ---------- standard choice question ---------- */
+function renderChoice(q){
 q.choices.forEach((choice,index)=>{
+  const div=document.createElement("label");
+  div.className="option";
+  const checked = (answers[current] && answers[current].index===index) ? "checked" : "";
+  div.innerHTML=`<input type="radio" name="answer" value="${index}" ${checked}> ${choice.label}`;
+  div.onclick=()=>{
+    answers[current]={type:"choice", index:index, cost:choice.cost, carbon:choice.carbon};
+    nextBtn.disabled=false;
+  };
+  optionsDiv.appendChild(div);
+});
+if(answers[current]) nextBtn.disabled=false;
+}
 
-const div=document.createElement("label");
-div.className="option";
-
-div.innerHTML=`
-<input type="radio" name="answer" value="${index}">
- ${choice.label}
+/* ---------- numeric question (ceiling height) ---------- */
+function renderNumber(q){
+const saved = (answers[current] && answers[current].value!=null) ? answers[current].value : q.default;
+const wrap=document.createElement("div");
+wrap.innerHTML=`
+  <input type="number" id="numInput" value="${saved}" min="${q.min}" max="${q.max}" step="0.5">
+  <span class="small"> ${q.unit}</span>
 `;
-
-div.onclick=()=>{
-answers[current]=index;
-nextBtn.disabled=false;
+optionsDiv.appendChild(wrap);
+const input=wrap.querySelector("#numInput");
+const commit=()=>{
+  const v=parseFloat(input.value);
+  if(!isNaN(v) && v>0){
+    answers[current]={type:"number", key:q.key, value:v};
+    nextBtn.disabled=false;
+  }else{
+    nextBtn.disabled=true;
+  }
 };
+input.oninput=commit;
+commit();
+}
 
-optionsDiv.appendChild(div);
+/* ---------- sizing branch (selector OR manual rooms) ---------- */
+function renderSize(q){
+// initialize saved state
+if(!answers[current] || answers[current].type!=="size"){
+  answers[current]={type:"size", mode:"select", choiceIndex:null, rooms:{}};
+  ROOM_TYPES.forEach(rt=>{
+    answers[current].rooms[rt.key] = (REFERENCE_HOME[rt.key]
+      ? Array(REFERENCE_HOME[rt.key]).fill(rt.defaultSqft) : []);
+  });
+}
+const state=answers[current];
 
+const toggle=document.createElement("div");
+toggle.className="branch-toggle";
+toggle.innerHTML=`
+  <button type="button" class="tab ${state.mode==="select"?"active":""}" data-mode="select">Pick a size</button>
+  <button type="button" class="tab ${state.mode==="manual"?"active":""}" data-mode="manual">Enter my rooms</button>
+`;
+optionsDiv.appendChild(toggle);
+
+const body=document.createElement("div");
+optionsDiv.appendChild(body);
+
+toggle.querySelectorAll(".tab").forEach(tab=>{
+  tab.onclick=()=>{
+    state.mode=tab.dataset.mode;
+    renderQuestion();
+  };
 });
 
+if(state.mode==="select"){
+  renderSizeSelect(q,state,body);
+}else{
+  renderSizeManual(q,state,body);
+}
+}
+
+function renderSizeSelect(q,state,body){
+q.choices.forEach((choice,index)=>{
+  const div=document.createElement("label");
+  div.className="option";
+  const checked = state.choiceIndex===index ? "checked" : "";
+  // Show the comparable construction dollar (same basis as the manual
+  // branch's running total): reference-home cost + this bucket's delta.
+  const construction = REF.cost + choice.cost;
+  div.innerHTML=`<input type="radio" name="answer" value="${index}" ${checked}> ${choice.label}
+    <span class="room-rate"> — construction ≈ $${Math.round(construction).toLocaleString()}</span>`;
+  div.onclick=()=>{
+    state.choiceIndex=index;
+    nextBtn.disabled=false;
+  };
+  body.appendChild(div);
+});
+nextBtn.disabled = (state.choiceIndex===null);
+}
+
+function renderSizeManual(q,state,body){
+ROOM_TYPES.forEach(rt=>{
+  const arr = state.rooms[rt.key] || (state.rooms[rt.key]=[]);
+
+  const row=document.createElement("div");
+  row.className="room-row";
+  row.innerHTML=`
+    <span class="room-label">${rt.label}
+      <span class="room-rate">$${rt.rate}/sq ft</span>
+    </span>
+  `;
+
+  const countWrap=document.createElement("div");
+  countWrap.innerHTML=`<label class="small">How many? </label>`;
+  const count=document.createElement("input");
+  count.type="number";
+  count.className="count-input";
+  count.min="0";
+  count.value=arr.length;
+  countWrap.appendChild(count);
+  row.appendChild(countWrap);
+  body.appendChild(row);
+
+  const fields=document.createElement("div");
+  fields.className="sqft-fields";
+  body.appendChild(fields);
+
+  const drawFields=()=>{
+    fields.innerHTML="";
+    arr.forEach((val,i)=>{
+      const f=document.createElement("div");
+      f.className="field";
+      f.innerHTML=`<span>#${i+1} sq ft</span>`;
+      const inp=document.createElement("input");
+      inp.type="number";
+      inp.min="0";
+      inp.value=val;
+      inp.oninput=()=>{ arr[i]=parseFloat(inp.value)||0; updateTotal(); };
+      f.appendChild(inp);
+      fields.appendChild(f);
+    });
+  };
+
+  count.oninput=()=>{
+    let n=parseInt(count.value);
+    if(isNaN(n)||n<0) n=0;
+    while(arr.length<n) arr.push(rt.defaultSqft);
+    while(arr.length>n) arr.pop();
+    drawFields();
+    updateTotal();
+  };
+
+  drawFields();
+});
+
+const totalBox=document.createElement("div");
+totalBox.className="running-total";
+totalBox.id="sizeTotal";
+body.appendChild(totalBox);
+
+function updateTotal(){
+  const t=manualTotals(state);
+  totalBox.innerText =
+    `Total: ${t.sqft.toLocaleString()} sq ft  •  Construction ≈ $${Math.round(t.cost).toLocaleString()}`;
+  nextBtn.disabled = (t.sqft<=0);
+}
+updateTotal();
+}
+
+/* sum a manual-size state into cost / carbon / sqft */
+function manualTotals(state){
+let cost=0, carbon=0, sqft=0;
+ROOM_TYPES.forEach(rt=>{
+  (state.rooms[rt.key]||[]).forEach(area=>{
+    const a=area||0;
+    sqft   += a;
+    cost   += a*rt.rate;
+    carbon += a*rt.carbonPerSqft;
+  });
+});
+return {cost, carbon, sqft};
+}
+
+/* resolve the sizing question into a {cost, carbon, sqft} contribution
+   that plugs into the base-cost + delta model */
+function resolveSize(q, state){
+if(state.mode==="manual"){
+  const t=manualTotals(state);
+  return {
+    cost:   t.cost - REF.cost,     // delta vs reference medium home
+    carbon: t.carbon - REF.carbon,
+    sqft:   t.sqft
+  };
+}else{
+  const c = q.choices[state.choiceIndex];
+  return {cost:c.cost, carbon:c.carbon, sqft:c.repSqft};
+}
+}
+
+/* ---------- location branch (default OR custom region) ---------- */
+function renderLocation(q){
+if(!answers[current] || answers[current].type!=="location"){
+  answers[current]={type:"location", mode:"default",
+    regionKey:q.regions[0].key, baseMult:q.regions[0].mult, factors:{}};
+}
+const state=answers[current];
+
+const toggle=document.createElement("div");
+toggle.className="branch-toggle";
+toggle.innerHTML=`
+  <button type="button" class="tab ${state.mode==="default"?"active":""}" data-mode="default">Gunnison County (default)</button>
+  <button type="button" class="tab ${state.mode==="custom"?"active":""}" data-mode="custom">Custom location</button>
+`;
+optionsDiv.appendChild(toggle);
+
+const body=document.createElement("div");
+optionsDiv.appendChild(body);
+
+toggle.querySelectorAll(".tab").forEach(tab=>{
+  tab.onclick=()=>{ state.mode=tab.dataset.mode; renderQuestion(); };
+});
+
+if(state.mode==="default"){
+  renderLocationDefault(q,state,body);
+}else{
+  renderLocationCustom(q,state,body);
+}
+}
+
+function renderLocationDefault(q,state,body){
+body.innerHTML=`
+  <div class="metric">
+    <strong>Gunnison County baseline — 1.00×</strong>
+    <p class="small">
+      The tool's cost assumptions are calibrated to Gunnison County, so no
+      location adjustment is applied. Choose "Custom location" to model a
+      different region or a remote build.
+    </p>
+  </div>
+`;
+nextBtn.disabled=false;
+}
+
+function renderLocationCustom(q,state,body){
+// region selector
+const regRow=document.createElement("div");
+regRow.className="room-row";
+regRow.innerHTML=`<span class="room-label">Region</span>`;
+const sel=document.createElement("select");
+q.regions.forEach(r=>{
+  const opt=document.createElement("option");
+  opt.value=r.key;
+  opt.textContent=`${r.label} — ${r.mult.toFixed(2)}×`;
+  if(r.key===state.regionKey) opt.selected=true;
+  sel.appendChild(opt);
+});
+regRow.appendChild(sel);
+body.appendChild(regRow);
+
+// editable base multiplier
+const multRow=document.createElement("div");
+multRow.className="room-row";
+multRow.innerHTML=`<span class="room-label">Base cost multiplier
+  <span class="room-rate">construction only</span></span>`;
+const multInput=document.createElement("input");
+multInput.type="number"; multInput.step="0.01"; multInput.min="0.5";
+multInput.value=state.baseMult.toFixed(2);
+multRow.appendChild(multInput);
+body.appendChild(multRow);
+
+// add-on factors
+LOCATION_FACTORS.forEach(f=>{
+  const row=document.createElement("div");
+  row.className="room-row";
+  row.innerHTML=`<span class="room-label" style="font-weight:normal">${f.label}
+    <span class="room-rate">+${f.add.toFixed(2)}×</span></span>`;
+  const cb=document.createElement("input");
+  cb.type="checkbox";
+  cb.checked=!!state.factors[f.key];
+  cb.style.width="auto";
+  cb.onchange=()=>{ state.factors[f.key]=cb.checked; update(); };
+  row.appendChild(cb);
+  body.appendChild(row);
+});
+
+const box=document.createElement("div");
+box.className="running-total";
+body.appendChild(box);
+
+sel.onchange=()=>{
+  state.regionKey=sel.value;
+  const r=q.regions.find(x=>x.key===sel.value);
+  state.baseMult=r.mult;
+  multInput.value=r.mult.toFixed(2);
+  update();
+};
+multInput.oninput=()=>{
+  const v=parseFloat(multInput.value);
+  state.baseMult = isNaN(v) ? 0 : v;
+  update();
+};
+
+function update(){
+  const eff=effectiveLocationMult(state);
+  box.innerText=`Effective location multiplier: ${eff.toFixed(2)}× (construction costs)`;
+  nextBtn.disabled = !(eff>0);
+}
+update();
+}
+
+function effectiveLocationMult(state){
+let m=state.baseMult;
+LOCATION_FACTORS.forEach(f=>{ if(state.factors[f.key]) m+=f.add; });
+return m;
+}
+
+function resolveLocation(q,state){
+if(state.mode==="default") return {mult:1, label:"Gunnison County (baseline)"};
+const r=q.regions.find(x=>x.key===state.regionKey) || q.regions[0];
+return {mult:effectiveLocationMult(state), label:r.label};
 }
 
 nextBtn.onclick=()=>{
-
 current++;
-
 if(current<questions.length){
-renderQuestion();
+  renderQuestion();
 }else{
-showResults();
+  showResults();
 }
+};
 
+backBtn.onclick=()=>{
+if(current>0){
+  current--;
+  renderQuestion();
+}
+};
+
+/* Preview shortcut: fill every question with a default answer and jump
+   straight to the results page. */
+document.getElementById("skipBtn").onclick=()=>{
+answers=[];
+questions.forEach((q,i)=>{
+  if(q.type==="choice"){
+    answers[i]={type:"choice", index:0, cost:q.choices[0].cost, carbon:q.choices[0].carbon};
+  }else if(q.type==="location"){
+    answers[i]={type:"location", mode:"default",
+      regionKey:q.regions[0].key, baseMult:q.regions[0].mult, factors:{}};
+  }else if(q.type==="size"){
+    const st={type:"size", mode:"select", choiceIndex:1, rooms:{}};
+    ROOM_TYPES.forEach(rt=>{
+      st.rooms[rt.key] = (REFERENCE_HOME[rt.key]
+        ? Array(REFERENCE_HOME[rt.key]).fill(rt.defaultSqft) : []);
+    });
+    answers[i]=st;
+  }else if(q.type==="number"){
+    answers[i]={type:"number", key:q.key, value:q.default};
+  }
+});
+showResults();
 };
 
 function showResults(){
@@ -353,40 +907,69 @@ document.getElementById("wizard").style.display="none";
 
 let totalCost=baseCost;
 let totalCarbon=baseCarbon;
+let totalSqft=0;
+let ceiling=BASE_CEILING;
+let locMult=1;
+let locLabel="";
 
 let drivers=[];
 
 questions.forEach((q,i)=>{
+  const a=answers[i];
 
-const c=q.choices[answers[i]];
+  if(q.type==="choice"){
+    totalCost+=a.cost;
+    totalCarbon+=a.carbon;
+    drivers.push({name:q.title, cost:a.cost, carbon:a.carbon});
 
-totalCost+=c.cost;
-totalCarbon+=c.carbon;
+  }else if(q.type==="size"){
+    const r=resolveSize(q,a);
+    totalCost+=r.cost;
+    totalCarbon+=r.carbon;
+    totalSqft=r.sqft;
+    drivers.push({name:q.title, cost:r.cost, carbon:r.carbon});
 
-drivers.push({
-name:q.title,
-cost:c.cost,
-carbon:c.carbon
+  }else if(q.type==="location"){
+    const r=resolveLocation(q,a);
+    locMult=r.mult;
+    locLabel=r.label;
+
+  }else if(q.type==="number" && q.key==="ceiling"){
+    ceiling=a.value;
+  }
 });
 
-});
+// energy from square feet and cubic feet
+const cubicFeet = totalSqft * ceiling;
+const annualEnergy = totalSqft * BASE_EUI * (ceiling / BASE_CEILING);
 
 const topCost =
-[...drivers]
-.sort((a,b)=>b.cost-a.cost)
-.slice(0,3);
+[...drivers].sort((a,b)=>b.cost-a.cost).slice(0,3);
 
 const topCarbon =
-[...drivers]
-.sort((a,b)=>b.carbon-a.carbon)
-.slice(0,3);
+[...drivers].sort((a,b)=>b.carbon-a.carbon).slice(0,3);
 
-const structure = totalCost * .25;
-const finishes = totalCost * .20;
-const site = totalCost * .08;
-const systems = totalCost * .09;
-const soft = totalCost * .12;
+// Category costs are shown at their BASE (pre-location) amounts; the location
+// multiplier is broken out as its own explicit line below so its dollar impact
+// is auditable rather than hidden inside each scaled row.
 const land = totalCost * .18;
+const site = totalCost * .08;
+const structure = totalCost * .25;
+const systems = totalCost * .09;
+const finishes = totalCost * .20;
+const soft = totalCost * .12;
+
+// Location scales HARD construction costs only (site, structure, systems,
+// finishes) — never land, soft costs, or financing. The adder is signed
+// (a discount below 1.00x) and is zero at the 1.00x baseline.
+const hardBase = site + structure + systems + finishes;   // totalCost * 0.62
+const locationAdder = hardBase * (locMult - 1);
+const hardCosts = hardBase + locationAdder;                // = hardBase * locMult
+
+// Contractor fee applies to hard construction costs (after location).
+const contractorFee = hardCosts * CONTRACTOR_FEE_PCT;
+
+const grandTotal = totalCost + locationAdder + contractorFee;
 
 document.getElementById("results").classList.remove("hidden");
 
@@ -396,11 +979,19 @@ document.getElementById("results").innerHTML = `
 
 <div class="metric">
 <h3>Estimated Total Project Cost</h3>
-<p><strong>$${Math.round(totalCost).toLocaleString()}</strong></p>
+<p><strong>$${Math.round(grandTotal).toLocaleString()}</strong></p>
 
 <p class="small">
 Definition: Educational estimate of total project cost including land,
-design, permitting, construction, and financing.
+design, permitting, construction, financing, and a
+${Math.round(CONTRACTOR_FEE_PCT*100)}% contractor fee on hard construction costs.
+</p>
+<p class="small">
+Location: <strong>${locLabel}</strong> — ${locMult.toFixed(2)}×${
+locMult===1
+  ? " (baseline, no adjustment)."
+  : " applied to hard construction costs. Land, soft costs, and financing are not adjusted."
+}
 </p>
 </div>
 
@@ -417,11 +1008,30 @@ Higher values indicate more material-related emissions than the baseline home.
 </p>
 </div>
 
+<div class="metric">
+<h3>Energy & Volume</h3>
+<p>
+<strong>${Math.round(totalSqft).toLocaleString()} sq ft</strong> floor area
+&nbsp;•&nbsp;
+<strong>${Math.round(cubicFeet).toLocaleString()} cu ft</strong> conditioned volume
+(${ceiling} ft ceilings)
+</p>
+<p>
+Estimated annual energy use:
+<strong>${Math.round(annualEnergy).toLocaleString()} kWh/yr</strong>
+</p>
+<p class="small">
+Definition: Rough educational estimate. Energy use scales with floor area and
+with conditioned volume — taller ceilings increase the space that must be
+heated and cooled.
+</p>
+</div>
+
 <h3>Top Cost Drivers</h3>
 
 <ul>
 ${topCost.map(x =>
-`<li>${x.name} (${x.cost >=0 ? "+" : ""}$${x.cost.toLocaleString()})</li>`
+`<li>${x.name} (${x.cost >=0 ? "+" : ""}$${Math.round(x.cost).toLocaleString()})</li>`
 ).join("")}
 </ul>
 
@@ -429,7 +1039,7 @@ ${topCost.map(x =>
 
 <ul>
 ${topCarbon.map(x =>
-`<li>${x.name} (${x.carbon >=0 ? "+" : ""}${x.carbon})</li>`
+`<li>${x.name} (${x.carbon >=0 ? "+" : ""}${Math.round(x.carbon)})</li>`
 ).join("")}
 </ul>
 
@@ -443,19 +1053,28 @@ ${topCarbon.map(x =>
 <tr><td>Mechanical Systems</td><td>$${Math.round(systems).toLocaleString()}</td></tr>
 <tr><td>Finishes</td><td>$${Math.round(finishes).toLocaleString()}</td></tr>
 <tr><td>Soft Costs & Financing</td><td>$${Math.round(soft).toLocaleString()}</td></tr>
+<tr><td>Location Adjustment (${locMult.toFixed(2)}× on hard costs)</td><td>${locationAdder>=0?"+":"−"}$${Math.round(Math.abs(locationAdder)).toLocaleString()}</td></tr>
+<tr><td>Contractor Fee (${Math.round(CONTRACTOR_FEE_PCT*100)}% of hard costs)</td><td>$${Math.round(contractorFee).toLocaleString()}</td></tr>
 </table>
+
+<p class="small">
+The contractor fee (general contractor overhead + profit) is charged on
+<strong>hard costs</strong> — the physical cost of building: site work,
+structure, mechanical systems, and finishes. It is not charged on land,
+soft costs, or financing.
+</p>
 
 <h3>What Changed Your Results?</h3>
 
 <ul>
 ${drivers
-.filter(d=>d.cost!==0 || d.carbon!==0)
+.filter(d=>Math.round(d.cost)!==0 || Math.round(d.carbon)!==0)
 .map(d=>`
 <li>
 <strong>${d.name}</strong><br>
-Cost Impact: ${d.cost>=0?"+":""}$${d.cost.toLocaleString()}
+Cost Impact: ${d.cost>=0?"+":""}$${Math.round(d.cost).toLocaleString()}
 &nbsp;&nbsp;|&nbsp;&nbsp;
-Carbon Impact: ${d.carbon>=0?"+":""}${d.carbon}
+Carbon Impact: ${d.carbon>=0?"+":""}${Math.round(d.carbon)}
 </li>
 `)
 .join("")}
