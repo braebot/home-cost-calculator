@@ -311,7 +311,7 @@ const ROOM_TYPES = [
   {key:"bathroom",label:"Bathrooms",            rate:600, carbonPerSqft:0.025, defaultSqft:90},
   {key:"kitchen", label:"Kitchens",             rate:650, carbonPerSqft:0.028, defaultSqft:250},
   {key:"living",  label:"Living / Family Rooms",rate:300, carbonPerSqft:0.016, defaultSqft:450},
-  {key:"garage",  label:"Garage Bays",          rate:200, carbonPerSqft:0.012, defaultSqft:300},
+  {key:"garage",  label:"Attached Garage Bays", rate:200, carbonPerSqft:0.012, defaultSqft:300},
   {key:"other",   label:"Other Rooms",          rate:340, carbonPerSqft:0.018, defaultSqft:200}
 ];
 
@@ -398,6 +398,18 @@ choices:[
 {label:"Small (<2,000 sq ft)", cost:-250000, carbon:-20, repSqft:1500},
 {label:"Medium (2,000-3,500 sq ft)", cost:0, carbon:0, repSqft:2510},
 {label:"Large (3,500–4,500 sq ft)", cost:500000, carbon:35, repSqft:4000}
+]
+},
+
+{
+type:"choice",
+title:"Detached Garage",
+desc:"A separate, unattached garage structure. Attached garage bays are counted with the home in the sizing step.",
+choices:[
+{label:"None", cost:0, carbon:0},
+{label:"1-car (~300 sq ft)", cost:75000, carbon:6},
+{label:"2-car (~600 sq ft)", cost:140000, carbon:12},
+{label:"3-car (~900 sq ft)", cost:200000, carbon:18}
 ]
 },
 
