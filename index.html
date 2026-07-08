@@ -455,9 +455,9 @@ type:"choice",
 title:"Windows",
 desc:"Windows impact comfort, efficiency, and cost.",
 choices:[
-{label:"Standard", cost:0, carbon:0},
-{label:"High Performance", cost:30000, carbon:-3},
-{label:"Architectural", cost:100000, carbon:10}
+{label:"Standard", cost:0, carbon:0, energyFactor:1.00},
+{label:"High Performance", cost:30000, carbon:-3, energyFactor:0.95},
+{label:"Architectural", cost:100000, carbon:10, energyFactor:1.02}
 ]
 },
 
@@ -477,9 +477,9 @@ type:"choice",
 title:"Insulation",
 desc:"Improved insulation can reduce operational energy needs.",
 choices:[
-{label:"Code Minimum", cost:0, carbon:0},
-{label:"Above Code", cost:15000, carbon:-5},
-{label:"High Performance", cost:40000, carbon:-10}
+{label:"Code Minimum", cost:0, carbon:0, energyFactor:1.00},
+{label:"Above Code", cost:15000, carbon:-5, energyFactor:0.90},
+{label:"High Performance", cost:40000, carbon:-10, energyFactor:0.80}
 ],
 references:[
 {label:"U.S. Dept. of Energy — Insulation (Energy Saver)", url:"https://www.energy.gov/energysaver/insulation"}
@@ -491,9 +491,9 @@ type:"choice",
 title:"HVAC",
 desc:"Heating and cooling systems affect comfort and efficiency.",
 choices:[
-{label:"Standard", cost:0, carbon:0},
-{label:"High Efficiency", cost:20000, carbon:-4},
-{label:"Premium Electrified", cost:60000, carbon:-8}
+{label:"Standard", cost:0, carbon:0, energyFactor:1.00},
+{label:"High Efficiency", cost:20000, carbon:-4, energyFactor:0.90},
+{label:"Premium Electrified", cost:60000, carbon:-8, energyFactor:0.82}
 ]
 },
 
@@ -502,9 +502,9 @@ type:"choice",
 title:"Solar",
 desc:"Solar increases upfront cost but can offset operational emissions.",
 choices:[
-{label:"None", cost:0, carbon:0},
-{label:"Moderate", cost:25000, carbon:-6},
-{label:"Large", cost:60000, carbon:-12}
+{label:"None", cost:0, carbon:0, energyFactor:1.00},
+{label:"Moderate", cost:25000, carbon:-6, energyFactor:0.85},
+{label:"Large", cost:60000, carbon:-12, energyFactor:0.70}
 ]
 },
 
@@ -610,14 +610,18 @@ q.choices.forEach((choice,index)=>{
 if(answers[current]) nextBtn.disabled=false;
 }
 
-/* Impact tag shown on each choice: cost and/or carbon delta vs. baseline.
-   Omits whichever is zero; the 0-cost / 0-carbon option is the baseline the
-   other options are measured against, so it is labeled as such. */
+/* Impact tag shown on each choice: cost, carbon, and (for energy-relevant
+   steps) operational-energy delta vs. baseline. Omits whichever is zero; the
+   all-zero / factor-1 option is the baseline, so it is labeled as such. */
 function choiceImpactLabel(choice){
 const parts=[];
 if(choice.cost!==0)   parts.push((choice.cost>0?"+":"−")+"$"+Math.abs(choice.cost).toLocaleString());
 if(choice.carbon!==0) parts.push((choice.carbon>0?"+":"−")+Math.abs(choice.carbon)+" carbon");
-return parts.length ? parts.join(" · ") : "baseline — no added cost or carbon";
+if(choice.energyFactor!=null && choice.energyFactor!==1){
+  const pct=Math.round((choice.energyFactor-1)*100);
+  parts.push((pct>0?"+":"−")+Math.abs(pct)+"% energy");
+}
+return parts.length ? parts.join(" · ") : "baseline — no added cost, carbon, or energy";
 }
 
 /* ---------- references framework ----------
@@ -997,6 +1001,7 @@ let totalSqft=0;
 let ceiling=BASE_CEILING;
 let locMult=1;
 let locLabel="";
+let energyMult=1;
 
 let drivers=[];
 
@@ -1006,6 +1011,8 @@ questions.forEach((q,i)=>{
   if(q.type==="choice"){
     totalCost+=a.cost;
     totalCarbon+=a.carbon;
+    const ch=q.choices[a.index];
+    if(ch && ch.energyFactor) energyMult*=ch.energyFactor;
     drivers.push({name:q.title, cost:a.cost, carbon:a.carbon});
 
   }else if(q.type==="size"){
@@ -1025,9 +1032,10 @@ questions.forEach((q,i)=>{
   }
 });
 
-// energy from square feet and cubic feet
+// energy from square feet and cubic feet, adjusted by efficiency choices
+// (insulation, HVAC, windows, solar)
 const cubicFeet = totalSqft * ceiling;
-const annualEnergy = totalSqft * BASE_EUI * (ceiling / BASE_CEILING);
+const annualEnergy = totalSqft * BASE_EUI * (ceiling / BASE_CEILING) * energyMult;
 
 const topCost =
 [...drivers].sort((a,b)=>b.cost-a.cost).slice(0,3);
@@ -1108,8 +1116,11 @@ Estimated annual energy use:
 </p>
 <p class="small">
 Definition: Rough educational estimate. Energy use scales with floor area and
-with conditioned volume — taller ceilings increase the space that must be
-heated and cooled.
+conditioned volume (taller ceilings increase the space that must be heated and
+cooled), and is adjusted by your efficiency choices — insulation, HVAC,
+windows, and solar.${energyMult!==1 ? ` Those choices net to
+<strong>${Math.round((energyMult-1)*100)>0?"+":"−"}${Math.abs(Math.round((energyMult-1)*100))}%</strong>
+vs. a code-baseline home of the same size.` : ""}
 </p>
 </div>
 
