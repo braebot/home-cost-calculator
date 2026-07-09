@@ -36,6 +36,15 @@ For *what* the code does, read `index.html` (the constants at the top of the
 - **Possible double-count:** the contractor fee sits on top of the base all-in
   cost. If that base already includes builder margin, this overstates it —
   needs confirmation of what the base number represents.
+- **Fixed-percentage breakdown:** the results table splits the subtotal by
+  fixed shares (18% land, 62% hard costs, 12% soft, 8% unallocated). Two
+  consequences: every cost delta (e.g. a detached garage) is smeared across all
+  categories instead of landing in its own row, and the Land row does not
+  reflect the actual Land Cost answer. Fixing this means moving from
+  percentage-of-total to per-category accumulation — a real modeling change.
+- **Energy factors stack multiplicatively** (insulation × HVAC × windows ×
+  solar); combining every upgrade may overstate total savings since real
+  measures overlap.
 
 ## Deferred (intentionally not built yet)
 - _(none currently)_
