@@ -333,6 +333,18 @@ function referenceTotals(){
 }
 const REF = referenceTotals();
 
+/* Starting rooms for the manual sizing branch — matches REFERENCE_HOME.
+   Used by both the sizing step and the results-preview shortcut so the two
+   can't drift apart. */
+function defaultRooms(){
+  const rooms={};
+  ROOM_TYPES.forEach(rt=>{
+    rooms[rt.key] = REFERENCE_HOME[rt.key]
+      ? Array(REFERENCE_HOME[rt.key]).fill(rt.defaultSqft) : [];
+  });
+  return rooms;
+}
+
 /* Energy assumptions (educational). */
 const BASE_EUI = 12;      // kWh per sq-ft per year, at baseline ceiling height
 const BASE_CEILING = 9;   // ft — baseline ceiling the EUI is calibrated to
@@ -352,6 +364,10 @@ const LOCATION_FACTORS = [
   {key:"access",    label:"Long-haul / limited site access (material freight)", add:0.05},
   {key:"elevation", label:"High elevation — snow load & deep frost depth",       add:0.03}
 ];
+
+/* Allowed range for a custom base location multiplier. */
+const MULT_MIN = 0.5;
+const MULT_MAX = 2.5;
 
 const questions = [
 
@@ -614,7 +630,9 @@ q.choices.forEach((choice,index)=>{
   div.innerHTML=`<input type="radio" name="answer" value="${index}" ${checked}> ${choice.label}
     <span class="room-rate">${choiceImpactLabel(choice)}</span>`;
   div.onclick=()=>{
-    answers[current]={type:"choice", index:index, cost:choice.cost, carbon:choice.carbon};
+    // Store only the index — cost/carbon/energy are read back from
+    // q.choices at results time (single source of truth).
+    answers[current]={type:"choice", index:index};
     nextBtn.disabled=false;
   };
   optionsDiv.appendChild(div);
@@ -685,35 +703,35 @@ input.oninput=commit;
 commit();
 }
 
+/* Two-tab mode switch shared by the branched steps (size, location).
+   Sets state.mode and re-renders the question when a tab is clicked. */
+function branchToggle(state, tabs){
+const toggle=document.createElement("div");
+toggle.className="branch-toggle";
+toggle.innerHTML=tabs.map(t=>
+  `<button type="button" class="tab ${state.mode===t.mode?"active":""}" data-mode="${t.mode}">${t.label}</button>`
+).join("");
+toggle.querySelectorAll(".tab").forEach(tab=>{
+  tab.onclick=()=>{ state.mode=tab.dataset.mode; renderQuestion(); };
+});
+optionsDiv.appendChild(toggle);
+}
+
 /* ---------- sizing branch (selector OR manual rooms) ---------- */
 function renderSize(q){
 // initialize saved state
 if(!answers[current] || answers[current].type!=="size"){
-  answers[current]={type:"size", mode:"select", choiceIndex:null, rooms:{}};
-  ROOM_TYPES.forEach(rt=>{
-    answers[current].rooms[rt.key] = (REFERENCE_HOME[rt.key]
-      ? Array(REFERENCE_HOME[rt.key]).fill(rt.defaultSqft) : []);
-  });
+  answers[current]={type:"size", mode:"select", choiceIndex:null, rooms:defaultRooms()};
 }
 const state=answers[current];
 
-const toggle=document.createElement("div");
-toggle.className="branch-toggle";
-toggle.innerHTML=`
-  <button type="button" class="tab ${state.mode==="select"?"active":""}" data-mode="select">Pick a size</button>
-  <button type="button" class="tab ${state.mode==="manual"?"active":""}" data-mode="manual">Enter my rooms</button>
-`;
-optionsDiv.appendChild(toggle);
+branchToggle(state, [
+  {mode:"select", label:"Pick a size"},
+  {mode:"manual", label:"Enter my rooms"}
+]);
 
 const body=document.createElement("div");
 optionsDiv.appendChild(body);
-
-toggle.querySelectorAll(".tab").forEach(tab=>{
-  tab.onclick=()=>{
-    state.mode=tab.dataset.mode;
-    renderQuestion();
-  };
-});
 
 if(state.mode==="select"){
   renderSizeSelect(q,state,body);
@@ -848,20 +866,13 @@ if(!answers[current] || answers[current].type!=="location"){
 }
 const state=answers[current];
 
-const toggle=document.createElement("div");
-toggle.className="branch-toggle";
-toggle.innerHTML=`
-  <button type="button" class="tab ${state.mode==="default"?"active":""}" data-mode="default">Gunnison County (default)</button>
-  <button type="button" class="tab ${state.mode==="custom"?"active":""}" data-mode="custom">Custom location</button>
-`;
-optionsDiv.appendChild(toggle);
+branchToggle(state, [
+  {mode:"default", label:"Gunnison County (default)"},
+  {mode:"custom",  label:"Custom location"}
+]);
 
 const body=document.createElement("div");
 optionsDiv.appendChild(body);
-
-toggle.querySelectorAll(".tab").forEach(tab=>{
-  tab.onclick=()=>{ state.mode=tab.dataset.mode; renderQuestion(); };
-});
 
 if(state.mode==="default"){
   renderLocationDefault(q,state,body);
@@ -906,8 +917,9 @@ multRow.className="room-row";
 multRow.innerHTML=`<span class="room-label">Base cost multiplier
   <span class="room-rate">construction only</span></span>`;
 const multInput=document.createElement("input");
-multInput.type="number"; multInput.step="0.01"; multInput.min="0.5";
-multInput.value=state.baseMult.toFixed(2);
+multInput.type="number"; multInput.step="0.01";
+multInput.min=MULT_MIN; multInput.max=MULT_MAX;
+multInput.value=isFinite(state.baseMult) ? state.baseMult.toFixed(2) : "";
 multRow.appendChild(multInput);
 body.appendChild(multRow);
 
@@ -938,15 +950,19 @@ sel.onchange=()=>{
   update();
 };
 multInput.oninput=()=>{
-  const v=parseFloat(multInput.value);
-  state.baseMult = isNaN(v) ? 0 : v;
+  state.baseMult=parseFloat(multInput.value);
   update();
 };
 
 function update(){
+  if(!isFinite(state.baseMult) || state.baseMult<MULT_MIN || state.baseMult>MULT_MAX){
+    box.innerText=`Enter a base multiplier between ${MULT_MIN.toFixed(2)}× and ${MULT_MAX.toFixed(2)}×.`;
+    nextBtn.disabled=true;
+    return;
+  }
   const eff=effectiveLocationMult(state);
   box.innerText=`Effective location multiplier: ${eff.toFixed(2)}× (construction costs)`;
-  nextBtn.disabled = !(eff>0);
+  nextBtn.disabled=false;
 }
 update();
 }
@@ -960,7 +976,9 @@ return m;
 function resolveLocation(q,state){
 if(state.mode==="default") return {mult:1, label:"Gunnison County (baseline)"};
 const r=q.regions.find(x=>x.key===state.regionKey) || q.regions[0];
-return {mult:effectiveLocationMult(state), label:r.label};
+const m=effectiveLocationMult(state);
+// Defensive: fall back to baseline if state ever holds an invalid multiplier.
+return {mult: isFinite(m)&&m>0 ? m : 1, label:r.label};
 }
 
 nextBtn.onclick=()=>{
@@ -979,23 +997,22 @@ if(current>0){
 }
 };
 
-/* Preview shortcut: fill every question with a default answer and jump
+/* Preview shortcut: fill every question with its baseline answer and jump
    straight to the results page. */
 document.getElementById("skipBtn").onclick=()=>{
 answers=[];
 questions.forEach((q,i)=>{
   if(q.type==="choice"){
-    answers[i]={type:"choice", index:0, cost:q.choices[0].cost, carbon:q.choices[0].carbon};
+    // Prefer the explicit baseline option (zero cost/carbon impact) rather
+    // than whatever happens to be listed first.
+    let idx=q.choices.findIndex(c=>c.cost===0 && c.carbon===0);
+    if(idx<0) idx=0;
+    answers[i]={type:"choice", index:idx};
   }else if(q.type==="location"){
     answers[i]={type:"location", mode:"default",
       regionKey:q.regions[0].key, baseMult:q.regions[0].mult, factors:{}};
   }else if(q.type==="size"){
-    const st={type:"size", mode:"select", choiceIndex:1, rooms:{}};
-    ROOM_TYPES.forEach(rt=>{
-      st.rooms[rt.key] = (REFERENCE_HOME[rt.key]
-        ? Array(REFERENCE_HOME[rt.key]).fill(rt.defaultSqft) : []);
-    });
-    answers[i]=st;
+    answers[i]={type:"size", mode:"select", choiceIndex:1, rooms:defaultRooms()};
   }else if(q.type==="number"){
     answers[i]={type:"number", key:q.key, value:q.default};
   }
@@ -1021,11 +1038,11 @@ questions.forEach((q,i)=>{
   const a=answers[i];
 
   if(q.type==="choice"){
-    totalCost+=a.cost;
-    totalCarbon+=a.carbon;
     const ch=q.choices[a.index];
-    if(ch && ch.energyFactor) energyMult*=ch.energyFactor;
-    drivers.push({name:q.title, cost:a.cost, carbon:a.carbon});
+    totalCost+=ch.cost;
+    totalCarbon+=ch.carbon;
+    if(ch.energyFactor) energyMult*=ch.energyFactor;
+    drivers.push({name:q.title, cost:ch.cost, carbon:ch.carbon});
 
   }else if(q.type==="size"){
     const r=resolveSize(q,a);
@@ -1082,6 +1099,11 @@ document.getElementById("results").classList.remove("hidden");
 document.getElementById("results").innerHTML = `
 
 <h2>Your Results</h2>
+
+<div class="nav">
+<button id="editBtn" class="secondary">← Edit answers</button>
+<button id="restartBtn" class="secondary">Start over</button>
+</div>
 
 <div class="metric">
 <h3>Estimated Total Project Cost</h3>
@@ -1198,6 +1220,22 @@ design details, market conditions, contractor pricing, and material selections.
 </p>
 
 `;
+
+// Results are no longer a dead end: edit keeps all answers, restart clears.
+document.getElementById("editBtn").onclick=()=>{
+  // After normal completion `current` is one past the last question.
+  current=Math.min(current, questions.length-1);
+  document.getElementById("results").classList.add("hidden");
+  document.getElementById("wizard").style.display="";
+  renderQuestion();
+};
+document.getElementById("restartBtn").onclick=()=>{
+  answers=[];
+  current=0;
+  document.getElementById("results").classList.add("hidden");
+  document.getElementById("wizard").style.display="";
+  renderQuestion();
+};
 
 }
 
