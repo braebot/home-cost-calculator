@@ -557,11 +557,14 @@ choices:[
 {
 type:"choice",
 title:"Insulation",
-desc:"Insulation affects the home's operational energy use.",
+desc:"Insulation affects the home's operational energy use. Air tightness matters just as much — sealing leaks cuts energy loss and improves indoor air quality and health.",
 choices:[
 {label:"Code Minimum", cost:0, carbon:0, energyFactor:1.00},
 {label:"Above Code", cost:15000, carbon:-5, energyFactor:0.90},
-{label:"High Performance", cost:40000, carbon:-10, energyFactor:0.80}
+{label:"High Performance — Petro-based", cost:40000, carbon:8, energyFactor:0.80,
+ note:"Spray foam and rigid foam boards — excellent performance, but petrochemical feedstocks carry high embodied carbon."},
+{label:"High Performance — Natural, carbon-storing", cost:50000, carbon:-15, energyFactor:0.80,
+ note:"Dense-pack cellulose, wood fiber, hemp, or wool — comparable performance while storing carbon in the walls."}
 ],
 references:[
 {label:"Building insulation — overview (Wikipedia)", url:"https://en.wikipedia.org/wiki/Building_insulation"}
