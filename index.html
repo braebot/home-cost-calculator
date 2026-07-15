@@ -332,6 +332,8 @@ shortcuts on the first step to preview a finished results page.
 
 <div id="devSkip">
 <button id="skipBtn" class="linklike">Skip to results with defaults →</button>
+&nbsp;·&nbsp;
+<button id="skipMaxBtn" class="linklike">Skip with most expensive options →</button>
 </div>
 
 <div id="refs"></div>
@@ -415,6 +417,9 @@ const LOCATION_FACTORS = [
 const MULT_MIN = 0.5;
 const MULT_MAX = 2.5;
 
+/* Convention: every choice question lists its options cheapest → most
+   expensive. The "most expensive" preview shortcut relies on this to pick
+   the last option. */
 const questions = [
 
 {
@@ -1117,28 +1122,48 @@ if(current>0){
 }
 };
 
-/* Preview shortcut: fill every question with its baseline answer and jump
-   straight to the results page. */
-document.getElementById("skipBtn").onclick=()=>{
+/* Preview shortcuts: fill every question and jump straight to results.
+   "baseline" picks each question's zero-impact option; "max" picks the most
+   expensive everything (choice options are ordered cheapest → most expensive
+   throughout, so the last option is the max). */
+function fillAnswers(mode){
 answers=[];
 questions.forEach((q,i)=>{
   if(q.type==="choice"){
-    // Prefer the explicit baseline option (zero cost/carbon impact) rather
-    // than whatever happens to be listed first.
-    let idx=q.choices.findIndex(c=>c.cost===0 && c.carbon===0);
-    if(idx<0) idx=0;
-    answers[i]={type:"choice", index:idx};
+    let idx;
+    if(mode==="max"){
+      idx=q.choices.length-1;
+    }else{
+      idx=q.choices.findIndex(c=>(c.cost||0)===0 && c.carbon===0
+        && (c.hardMult==null || c.hardMult===1)
+        && !(c.projectPct>0) && !(c.solarOffset>0));
+      if(idx<0) idx=0;
+    }
+    const ans={type:"choice", index:idx, addons:{}};
+    (q.addons||[]).forEach(ad=>{ ans.addons[ad.key]=(mode==="max"); });
+    answers[i]=ans;
   }else if(q.type==="location"){
-    answers[i]={type:"location", mode:"default",
-      regionKey:q.regions[0].key, baseMult:q.regions[0].mult, factors:{}};
+    if(mode==="max"){
+      const top=q.regions.reduce((a,b)=>b.mult>a.mult?b:a);
+      const factors={};
+      LOCATION_FACTORS.forEach(f=>{ factors[f.key]=true; });
+      answers[i]={type:"location", mode:"custom",
+        regionKey:top.key, baseMult:top.mult, factors:factors};
+    }else{
+      answers[i]={type:"location", mode:"default",
+        regionKey:q.regions[0].key, baseMult:q.regions[0].mult, factors:{}};
+    }
   }else if(q.type==="size"){
-    answers[i]={type:"size", mode:"select", choiceIndex:1, rooms:defaultRooms()};
+    answers[i]={type:"size", mode:"select",
+      choiceIndex: mode==="max" ? q.choices.length-1 : 1, rooms:defaultRooms()};
   }else if(q.type==="number"){
-    answers[i]={type:"number", key:q.key, value:q.default};
+    answers[i]={type:"number", key:q.key, value: mode==="max" ? q.max : q.default};
   }
 });
 showResults();
-};
+}
+document.getElementById("skipBtn").onclick=()=>fillAnswers("baseline");
+document.getElementById("skipMaxBtn").onclick=()=>fillAnswers("max");
 
 function showResults(){
 
