@@ -177,6 +177,15 @@ ul{
     font-weight:normal;
 }
 
+/* optional explanatory line under a choice option's label */
+.option-note{
+    color:#666;
+    font-size:.85em;
+    font-weight:normal;
+    line-height:1.4em;
+    margin:4px 0 0 22px;
+}
+
 .sqft-fields{
     display:flex;
     flex-wrap:wrap;
@@ -506,11 +515,18 @@ choices:[
 {
 type:"choice",
 title:"Structure",
-desc:"Structural systems influence materials and carbon.",
+desc:"Structural systems influence materials, cost, and carbon.",
 choices:[
-{label:"Standard Wood", cost:0, carbon:0},
-{label:"Enhanced Wood", cost:40000, carbon:-4},
-{label:"Steel Intensive", cost:120000, carbon:18}
+{label:"Standard Wood", cost:0, carbon:0,
+ note:"Conventional dimensional-lumber stick framing."},
+{label:"Engineered Wood", cost:40000, carbon:-4,
+ note:"Manufactured structural lumber — glulam beams, LVL, I-joists, CLT panels. Uses smaller, faster-growing trees and stores carbon in long-lived products."},
+{label:"Natural / Earthen Building", cost:60000, carbon:-8,
+ note:"Straw bale, adobe, cob, or hempcrete — site-sourced or minimally processed materials with very low embodied carbon."},
+{label:"Timber Frame", cost:80000, carbon:2,
+ note:"Exposed heavy-timber post-and-beam joinery — more material and craft labor than stick framing."},
+{label:"Steel Intensive", cost:120000, carbon:18,
+ note:"Steel framing or long-span steel elements — high embodied carbon from steel production."}
 ]
 },
 
@@ -664,7 +680,8 @@ q.choices.forEach((choice,index)=>{
   div.className="option";
   const checked = (answers[current] && answers[current].index===index) ? "checked" : "";
   div.innerHTML=`<input type="radio" name="answer" value="${index}" ${checked}> ${choice.label}
-    <span class="room-rate">${choiceImpactLabel(choice)}</span>`;
+    <span class="room-rate">${choiceImpactLabel(choice)}</span>
+    ${choice.note ? `<div class="option-note">${choice.note}</div>` : ""}`;
   div.onclick=()=>{
     // Store only the index — cost/carbon/energy are read back from
     // q.choices at results time (single source of truth).
