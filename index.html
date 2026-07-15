@@ -449,6 +449,10 @@ choices:[
 {label:"Easy", cost:0, carbon:0},
 {label:"Moderate", cost:50000, carbon:3},
 {label:"Difficult", cost:150000, carbon:8}
+],
+addons:[
+{key:"winter", hardPct:0.05, short:"Winter Construction",
+ label:"Building through winter — temporary heat, snow management, weather delays"}
 ]
 },
 
@@ -494,11 +498,11 @@ effect:(v)=>{
 {
 type:"choice",
 title:"Design Complexity",
-desc:"Complex forms require more design, engineering, and labor.",
+desc:"Complex forms require more design, engineering, and labor — the premium scales with everything you build, so it's a multiplier on hard construction costs.",
 choices:[
-{label:"Simple", cost:0, carbon:0},
-{label:"Custom", cost:75000, carbon:5},
-{label:"Highly Custom", cost:200000, carbon:12}
+{label:"Simple", cost:0, carbon:0, hardMult:1.00},
+{label:"Custom", cost:0, carbon:5, hardMult:1.10},
+{label:"Highly Custom", cost:0, carbon:12, hardMult:1.25}
 ]
 },
 
@@ -688,22 +692,44 @@ if(q.type==="choice"){
 
 /* ---------- standard choice question ---------- */
 function renderChoice(q){
+// Eager init so add-on checkboxes have somewhere to store state before an
+// option is picked. Only the index + addons are stored — cost/carbon/energy
+// are read back from q.choices at results time (single source of truth).
+if(!answers[current] || answers[current].type!=="choice"){
+  answers[current]={type:"choice", index:null, addons:{}};
+}
+const state=answers[current];
+if(!state.addons) state.addons={};
+
 q.choices.forEach((choice,index)=>{
   const div=document.createElement("label");
   div.className="option";
-  const checked = (answers[current] && answers[current].index===index) ? "checked" : "";
+  const checked = state.index===index ? "checked" : "";
   div.innerHTML=`<input type="radio" name="answer" value="${index}" ${checked}> ${choice.label}
     <span class="room-rate">${choiceImpactLabel(choice)}</span>
     ${choice.note ? `<div class="option-note">${choice.note}</div>` : ""}`;
   div.onclick=()=>{
-    // Store only the index — cost/carbon/energy are read back from
-    // q.choices at results time (single source of truth).
-    answers[current]={type:"choice", index:index};
+    state.index=index;
     nextBtn.disabled=false;
   };
   optionsDiv.appendChild(div);
 });
-if(answers[current]) nextBtn.disabled=false;
+
+// optional add-on checkboxes (e.g. winter construction premium)
+(q.addons||[]).forEach(ad=>{
+  const row=document.createElement("label");
+  row.className="option";
+  const cb=document.createElement("input");
+  cb.type="checkbox";
+  cb.checked=!!state.addons[ad.key];
+  cb.onchange=()=>{ state.addons[ad.key]=cb.checked; };
+  row.appendChild(cb);
+  row.insertAdjacentHTML("beforeend",
+    ` ${ad.label} <span class="room-rate">+${Math.round(ad.hardPct*100)}% on hard costs</span>`);
+  optionsDiv.appendChild(row);
+});
+
+nextBtn.disabled = (state.index==null);
 }
 
 /* Impact tag shown on each choice: cost, carbon, and (for energy-relevant
@@ -711,12 +737,19 @@ if(answers[current]) nextBtn.disabled=false;
    all-zero / factor-1 option is the baseline, so it is labeled as such. */
 function choiceImpactLabel(choice){
 const parts=[];
-if(choice.cost!==0)   parts.push((choice.cost>0?"+":"−")+"$"+Math.abs(choice.cost).toLocaleString());
+const cost=choice.cost||0;
+if(cost!==0) parts.push((cost>0?"+":"−")+"$"+Math.abs(cost).toLocaleString());
+if(choice.hardMult!=null && choice.hardMult!==1)
+  parts.push("×"+choice.hardMult.toFixed(2)+" on hard costs");
+if(choice.projectPct!=null && choice.projectPct!==0)
+  parts.push("+"+Math.round(choice.projectPct*100)+"% of project cost");
 if(choice.carbon!==0) parts.push((choice.carbon>0?"+":"−")+Math.abs(choice.carbon)+" carbon");
 if(choice.energyFactor!=null && choice.energyFactor!==1){
   const pct=Math.round((choice.energyFactor-1)*100);
   parts.push((pct>0?"+":"−")+Math.abs(pct)+"% energy");
 }
+if(choice.solarOffset)
+  parts.push("offsets ~"+Math.round(choice.solarOffset*100)+"% of annual energy");
 return parts.length ? parts.join(" · ") : "baseline — no added cost, carbon, or energy";
 }
 
@@ -1100,6 +1133,7 @@ let ceiling=BASE_CEILING;
 let locMult=1;
 let locLabel="";
 let energyMult=1;
+let hardAdjust=[];   // {label, mult, carbon} — multipliers on hard costs
 
 let drivers=[];
 
@@ -1108,10 +1142,20 @@ questions.forEach((q,i)=>{
 
   if(q.type==="choice"){
     const ch=q.choices[a.index];
-    totalCost+=ch.cost;
+    totalCost+=(ch.cost||0);
     totalCarbon+=ch.carbon;
     if(ch.energyFactor) energyMult*=ch.energyFactor;
-    drivers.push({name:q.title, cost:ch.cost, carbon:ch.carbon});
+    if(ch.hardMult!=null && ch.hardMult!==1){
+      // dollar impact is computed via the adjustment chain below, so this
+      // choice becomes a driver there rather than a fixed-cost driver here
+      hardAdjust.push({label:`${q.title} (${ch.label})`, mult:ch.hardMult, carbon:ch.carbon});
+    }else{
+      drivers.push({name:q.title, cost:ch.cost||0, carbon:ch.carbon});
+    }
+    (q.addons||[]).forEach(ad=>{
+      if(a.addons && a.addons[ad.key])
+        hardAdjust.push({label:ad.short||ad.label, mult:1+ad.hardPct, carbon:0});
+    });
 
   }else if(q.type==="size"){
     const r=resolveSize(q,a);
@@ -1141,9 +1185,9 @@ const topCost =
 const topCarbon =
 [...drivers].sort((a,b)=>b.carbon-a.carbon).slice(0,3);
 
-// Category costs are shown at their BASE (pre-location) amounts; the location
-// multiplier is broken out as its own explicit line below so its dollar impact
-// is auditable rather than hidden inside each scaled row.
+// Category costs are shown at their BASE (pre-adjustment) amounts; each
+// multiplier is broken out as its own explicit line below so its dollar
+// impact is auditable rather than hidden inside scaled rows.
 const land = totalCost * .18;
 const site = totalCost * .08;
 const structure = totalCost * .25;
@@ -1151,17 +1195,30 @@ const systems = totalCost * .09;
 const finishes = totalCost * .20;
 const soft = totalCost * .12;
 
-// Location scales HARD construction costs only (site, structure, systems,
-// finishes) — never land, soft costs, or financing. The adder is signed
-// (a discount below 1.00x) and is zero at the 1.00x baseline.
+// Multipliers (location, design complexity, winter…) scale HARD construction
+// costs only (site, structure, systems, finishes) — never land, soft costs,
+// or financing. They're applied SEQUENTIALLY so the adjustment rows sum
+// exactly to the total adjustment; each delta is signed (discount below
+// 1.00×) and zero at the 1.00× baseline.
 const hardBase = site + structure + systems + finishes;   // totalCost * 0.62
-const locationAdder = hardBase * (locMult - 1);
-const hardCosts = hardBase + locationAdder;                // = hardBase * locMult
+const chain = [];
+if(locMult!==1) chain.push({label:`Location (${locLabel})`, mult:locMult, carbon:0});
+chain.push(...hardAdjust);
 
-// Contractor fee applies to hard construction costs (after location).
+let hardCosts = hardBase;
+const adjRows = [];
+chain.forEach(adj=>{
+  const delta = hardCosts * (adj.mult - 1);
+  adjRows.push({label:adj.label, mult:adj.mult, delta:delta});
+  drivers.push({name:adj.label, cost:delta, carbon:adj.carbon||0});
+  hardCosts += delta;
+});
+const hardAdjustTotal = hardCosts - hardBase;
+
+// Contractor fee applies to hard construction costs (after adjustments).
 const contractorFee = hardCosts * CONTRACTOR_FEE_PCT;
 
-const grandTotal = totalCost + locationAdder + contractorFee;
+const grandTotal = totalCost + hardAdjustTotal + contractorFee;
 
 document.getElementById("results").classList.remove("hidden");
 
@@ -1253,7 +1310,9 @@ ${topCarbon.map(x =>
 <tr><td>Mechanical Systems</td><td>$${Math.round(systems).toLocaleString()}</td></tr>
 <tr><td>Finishes</td><td>$${Math.round(finishes).toLocaleString()}</td></tr>
 <tr><td>Soft Costs & Financing</td><td>$${Math.round(soft).toLocaleString()}</td></tr>
-<tr><td>Location Adjustment (${locMult.toFixed(2)}× on hard costs)</td><td>${locationAdder>=0?"+":"−"}$${Math.round(Math.abs(locationAdder)).toLocaleString()}</td></tr>
+${adjRows.map(r=>
+`<tr><td>${r.label} — ${r.mult.toFixed(2)}× on hard costs</td><td>${r.delta>=0?"+":"−"}$${Math.round(Math.abs(r.delta)).toLocaleString()}</td></tr>`
+).join("")}
 <tr><td>Contractor Fee (${Math.round(CONTRACTOR_FEE_PCT*100)}% of hard costs)</td><td>$${Math.round(contractorFee).toLocaleString()}</td></tr>
 </table>
 
