@@ -395,11 +395,11 @@ function defaultRooms(){
 const BASE_EUI = 12;      // kWh per sq-ft per year, at baseline ceiling height
 const BASE_CEILING = 9;   // ft — baseline ceiling the EUI is calibrated to
 
-/* Contractor (general contractor) fee — overhead + profit margin.
-   Custom homes typically run 15–25% of HARD construction costs (site,
-   structure, systems, finishes) — not land, soft costs, or financing.
-   18% is a reasonable midpoint. */
-const CONTRACTOR_FEE_PCT = 0.18;
+/* Contractor (general contractor) fee — overhead + profit margin, charged on
+   HARD construction costs (site, structure, systems, finishes) — not land,
+   soft costs, or financing. User-adjustable in the Contractor Fee step;
+   subject to market rates. */
+const CONTRACTOR_FEE_DEFAULT = 0.15;
 
 /* Location cost multipliers (PLACEHOLDER assumptions). Applied to HARD
    construction costs only (site, structure, systems, finishes) — never to
@@ -636,6 +636,18 @@ choices:[
 {label:"Custom", cost:50000, carbon:2},
 {label:"Luxury", cost:150000, carbon:5}
 ]
+},
+
+{
+type:"number",
+key:"contractorFee",
+title:"Contractor Fee",
+desc:"General contractor overhead + profit, charged on hard construction costs. Subject to market rates — busy seasons and remote work command higher fees.",
+unit:"%",
+default:15,
+min:10,
+max:20,
+effect:(v)=>`${v}% of hard construction costs (site work, structure, systems, finishes).`
 },
 
 {
@@ -1133,6 +1145,7 @@ let ceiling=BASE_CEILING;
 let locMult=1;
 let locLabel="";
 let energyMult=1;
+let feePct=CONTRACTOR_FEE_DEFAULT;
 let hardAdjust=[];   // {label, mult, carbon} — multipliers on hard costs
 
 let drivers=[];
@@ -1171,6 +1184,9 @@ questions.forEach((q,i)=>{
 
   }else if(q.type==="number" && q.key==="ceiling"){
     ceiling=a.value;
+
+  }else if(q.type==="number" && q.key==="contractorFee"){
+    feePct=a.value/100;
   }
 });
 
@@ -1216,7 +1232,7 @@ chain.forEach(adj=>{
 const hardAdjustTotal = hardCosts - hardBase;
 
 // Contractor fee applies to hard construction costs (after adjustments).
-const contractorFee = hardCosts * CONTRACTOR_FEE_PCT;
+const contractorFee = hardCosts * feePct;
 
 const grandTotal = totalCost + hardAdjustTotal + contractorFee;
 
@@ -1238,7 +1254,7 @@ document.getElementById("results").innerHTML = `
 <p class="small">
 Definition: Educational estimate of total project cost including land,
 design, permitting, construction, financing, and a
-${Math.round(CONTRACTOR_FEE_PCT*100)}% contractor fee on hard construction costs.
+${Math.round(feePct*100)}% contractor fee on hard construction costs.
 </p>
 <p class="small">
 Location: <strong>${locLabel}</strong> — ${locMult.toFixed(2)}×${
@@ -1313,7 +1329,7 @@ ${topCarbon.map(x =>
 ${adjRows.map(r=>
 `<tr><td>${r.label} — ${r.mult.toFixed(2)}× on hard costs</td><td>${r.delta>=0?"+":"−"}$${Math.round(Math.abs(r.delta)).toLocaleString()}</td></tr>`
 ).join("")}
-<tr><td>Contractor Fee (${Math.round(CONTRACTOR_FEE_PCT*100)}% of hard costs)</td><td>$${Math.round(contractorFee).toLocaleString()}</td></tr>
+<tr><td>Contractor Fee (${Math.round(feePct*100)}% of hard costs)</td><td>$${Math.round(contractorFee).toLocaleString()}</td></tr>
 </table>
 
 <p class="small">
