@@ -18,8 +18,22 @@ For *what* the code does, read `index.html` (the constants at the top of the
   "medium = 0," so the manual branch has to return a delta to plug in cleanly.
 - **Contractor fee applies to hard costs only** (site, structure, systems,
   finishes — not land, soft costs, or financing), because a GC fee isn't charged
-  on land or financing. Rate is a fixed 18% (midpoint of a typical 15–25%
-  custom-home range), deliberately not user-editable this iteration.
+  on land or financing. Now a **user-adjustable wizard step** ("subject to
+  market rates"): default 15%, allowed range 10–20%. (Supersedes the earlier
+  fixed-18% decision.)
+- **All hard-cost multipliers share one sequential chain** — location, design
+  complexity, and the winter-construction premium each multiply hard costs
+  only, applied in sequence so each breakdown row's dollar delta is auditable
+  and the rows sum exactly to the total adjustment. Design complexity became a
+  multiplier (not fixed dollars) because complexity scales with everything
+  built.
+- **Financing is a percentage of adjusted project cost** (0/4/8% presets), not
+  a fixed number, so it scales with project size. It appears as its own
+  breakdown row; the soft-costs row no longer claims to include it.
+- **Solar is modeled as an offset fraction, not an efficiency factor** — the
+  net-zero tiers offset 0–130% of gross energy. Results show gross use, solar
+  offset, and net separately (with the formula spelled out) so a net-zero home
+  reads as "gross − offset = 0" instead of hiding the math.
 - **Location multiplier scales hard construction costs only** (site, structure,
   systems, finishes) — not land, soft costs, or financing. This matches the
   contractor-fee basis: a regional construction index shouldn't touch land
