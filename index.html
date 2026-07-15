@@ -357,6 +357,7 @@ const ROOM_TYPES = [
   {key:"kitchen", label:"Kitchens",             rate:650, carbonPerSqft:0.028, defaultSqft:250},
   {key:"living",  label:"Living / Family Rooms",rate:300, carbonPerSqft:0.016, defaultSqft:450},
   {key:"garage",  label:"Attached Garage Bays", rate:200, carbonPerSqft:0.012, defaultSqft:300},
+  {key:"office",  label:"Home Offices",         rate:340, carbonPerSqft:0.018, defaultSqft:120},
   {key:"other",   label:"Other Rooms",          rate:340, carbonPerSqft:0.018, defaultSqft:200}
 ];
 
@@ -507,6 +508,7 @@ title:"Foundation",
 desc:"Concrete-heavy foundations typically increase embodied carbon.",
 choices:[
 {label:"Slab", cost:0, carbon:0},
+{label:"Crawl Space", cost:30000, carbon:6},
 {label:"Basement", cost:60000, carbon:12},
 {label:"Walkout Basement", cost:120000, carbon:20}
 ]
@@ -593,8 +595,12 @@ type:"choice",
 title:"Exterior Finishes",
 desc:"Exterior materials vary in durability and embodied carbon.",
 choices:[
+{label:"Economy (fiber-cement)", cost:-20000, carbon:-2,
+ note:"Durable, low-maintenance panel or lap siding."},
 {label:"Standard", cost:0, carbon:0},
 {label:"Premium", cost:50000, carbon:3},
+{label:"Natural / Reclaimed Local", cost:60000, carbon:-3,
+ note:"Locally sourced wood, stone, or reclaimed materials — lower transport and embodied carbon."},
 {label:"Luxury", cost:120000, carbon:8}
 ]
 },
