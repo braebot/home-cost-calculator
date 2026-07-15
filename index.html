@@ -813,9 +813,12 @@ q.choices.forEach((choice,index)=>{
   const checked = state.choiceIndex===index ? "checked" : "";
   // Show the comparable construction dollar (same basis as the manual
   // branch's running total): reference-home cost + this bucket's delta.
+  // Per-sqft is computed, not hardcoded — it naturally declines as size
+  // grows (economies of scale: fixed costs spread over more area).
   const construction = REF.cost + choice.cost;
+  const perSqft = Math.round(construction / choice.repSqft);
   div.innerHTML=`<input type="radio" name="answer" value="${index}" ${checked}> ${choice.label}
-    <span class="room-rate"> — construction ≈ $${Math.round(construction).toLocaleString()}</span>`;
+    <span class="room-rate"> — construction ≈ $${Math.round(construction).toLocaleString()} (~$${perSqft.toLocaleString()}/sq ft)</span>`;
   div.onclick=()=>{
     state.choiceIndex=index;
     nextBtn.disabled=false;
