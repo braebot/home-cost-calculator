@@ -577,8 +577,12 @@ title:"HVAC",
 desc:"Heating and cooling systems affect comfort and efficiency.",
 choices:[
 {label:"Standard", cost:0, carbon:0, energyFactor:1.00},
-{label:"High Efficiency", cost:20000, carbon:-4, energyFactor:0.90},
-{label:"Premium Electrified", cost:60000, carbon:-8, energyFactor:0.82}
+{label:"High Efficiency — Petrochemical", cost:15000, carbon:-2, energyFactor:0.92,
+ note:"Condensing gas or propane furnace/boiler — efficient, but still burns fossil fuel."},
+{label:"High Efficiency — Electric", cost:25000, carbon:-4, energyFactor:0.88,
+ note:"Air-source heat pump — no on-site combustion; pairs with solar."},
+{label:"Premium Electrified", cost:60000, carbon:-8, energyFactor:0.82,
+ note:"Ground-source heat pump or top-tier cold-climate system with heat-recovery ventilation."}
 ]
 },
 
