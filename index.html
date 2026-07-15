@@ -653,11 +653,11 @@ effect:(v)=>`${v}% of hard construction costs (site work, structure, systems, fi
 {
 type:"choice",
 title:"Financing",
-desc:"Financing costs vary by project structure and duration.",
+desc:"Financing costs scale with the size of the project, so they're a percentage of total project cost rather than a fixed number.",
 choices:[
-{label:"Minimal Financing", cost:0, carbon:0},
-{label:"Typical Construction Loan", cost:50000, carbon:0},
-{label:"Complex Financing", cost:120000, carbon:0}
+{label:"Minimal Financing (mostly cash)", cost:0, carbon:0, projectPct:0},
+{label:"Typical Construction Loan", cost:0, carbon:0, projectPct:0.04},
+{label:"Complex Financing", cost:0, carbon:0, projectPct:0.08}
 ]
 }
 
@@ -1146,6 +1146,7 @@ let locMult=1;
 let locLabel="";
 let energyMult=1;
 let feePct=CONTRACTOR_FEE_DEFAULT;
+let financePct=0;
 let hardAdjust=[];   // {label, mult, carbon} — multipliers on hard costs
 
 let drivers=[];
@@ -1155,6 +1156,12 @@ questions.forEach((q,i)=>{
 
   if(q.type==="choice"){
     const ch=q.choices[a.index];
+    if(ch.projectPct!=null){
+      // financing — a percentage of project cost, computed after the
+      // subtotal and hard-cost adjustments are known (see below)
+      financePct=ch.projectPct;
+      return;
+    }
     totalCost+=(ch.cost||0);
     totalCarbon+=ch.carbon;
     if(ch.energyFactor) energyMult*=ch.energyFactor;
@@ -1231,10 +1238,14 @@ chain.forEach(adj=>{
 });
 const hardAdjustTotal = hardCosts - hardBase;
 
+// Financing is a percentage of the adjusted pre-fee project cost.
+const financing = financePct * (totalCost + hardAdjustTotal);
+if(financing!==0) drivers.push({name:"Financing", cost:financing, carbon:0});
+
 // Contractor fee applies to hard construction costs (after adjustments).
 const contractorFee = hardCosts * feePct;
 
-const grandTotal = totalCost + hardAdjustTotal + contractorFee;
+const grandTotal = totalCost + hardAdjustTotal + financing + contractorFee;
 
 document.getElementById("results").classList.remove("hidden");
 
@@ -1325,10 +1336,11 @@ ${topCarbon.map(x =>
 <tr><td>Structure</td><td>$${Math.round(structure).toLocaleString()}</td></tr>
 <tr><td>Mechanical Systems</td><td>$${Math.round(systems).toLocaleString()}</td></tr>
 <tr><td>Finishes</td><td>$${Math.round(finishes).toLocaleString()}</td></tr>
-<tr><td>Soft Costs & Financing</td><td>$${Math.round(soft).toLocaleString()}</td></tr>
+<tr><td>Soft Costs (design, permitting)</td><td>$${Math.round(soft).toLocaleString()}</td></tr>
 ${adjRows.map(r=>
 `<tr><td>${r.label} — ${r.mult.toFixed(2)}× on hard costs</td><td>${r.delta>=0?"+":"−"}$${Math.round(Math.abs(r.delta)).toLocaleString()}</td></tr>`
 ).join("")}
+<tr><td>Financing (${Math.round(financePct*100)}% of project cost)</td><td>$${Math.round(financing).toLocaleString()}</td></tr>
 <tr><td>Contractor Fee (${Math.round(feePct*100)}% of hard costs)</td><td>$${Math.round(contractorFee).toLocaleString()}</td></tr>
 </table>
 
