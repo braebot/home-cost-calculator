@@ -138,7 +138,25 @@ table{
 td,th{
     padding:8px;
     border-bottom:1px solid #ddd;
+    text-align:left;
 }
+
+th:nth-child(n+2), td:nth-child(n+2){
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+}
+
+a.editlink{
+    color:#4f46e5;
+    font-size:.85em;
+    text-decoration:none;
+    white-space:nowrap;
+}
+
+a.editlink:hover{ text-decoration:underline; }
+
+td .diff-down{ color:#15803d; }   /* below baseline (cheaper) */
+td .diff-up{ color:#666; }        /* above baseline */
 
 .hidden{
     display:none;
@@ -1138,6 +1156,22 @@ if(current>0){
 }
 };
 
+/* Jump from the results page back to a specific question (used by the "edit"
+   links in the breakdown / decision tables). */
+function goToQuestion(idx){
+if(idx<0 || idx>=questions.length) return;
+current=idx;
+document.getElementById("results").classList.add("hidden");
+document.getElementById("wizard").style.display="";
+renderQuestion();
+}
+
+/* Small "edit" link back to a question, matched by its title. */
+function editLink(title){
+const idx=questions.findIndex(q=>q.title===title);
+return idx>=0 ? ` <a href="#" class="editlink" data-goto="${idx}">edit</a>` : "";
+}
+
 /* Preview shortcuts: fill every question and jump straight to results.
    "baseline" picks each question's zero-impact option; "max" picks the most
    expensive everything (choice options are ordered cheapest → most expensive
@@ -1217,13 +1251,13 @@ questions.forEach((q,i)=>{
     if(ch.hardMult!=null && ch.hardMult!==1){
       // dollar impact is computed via the adjustment chain below, so this
       // choice becomes a driver there rather than a fixed-cost driver here
-      hardAdjust.push({label:`${q.title} (${ch.label})`, mult:ch.hardMult, carbon:ch.carbon});
+      hardAdjust.push({label:`${q.title} (${ch.label})`, mult:ch.hardMult, carbon:ch.carbon, qTitle:q.title});
     }else{
-      drivers.push({name:q.title, cost:ch.cost||0, carbon:ch.carbon});
+      drivers.push({name:q.title, cost:ch.cost||0, carbon:ch.carbon, qTitle:q.title});
     }
     (q.addons||[]).forEach(ad=>{
       if(a.addons && a.addons[ad.key])
-        hardAdjust.push({label:ad.short||ad.label, mult:1+ad.hardPct, carbon:0});
+        hardAdjust.push({label:ad.short||ad.label, mult:1+ad.hardPct, carbon:0, qTitle:q.title});
     });
 
   }else if(q.type==="size"){
@@ -1277,27 +1311,48 @@ const soft = totalCost * .12;
 // 1.00×) and zero at the 1.00× baseline.
 const hardBase = site + structure + systems + finishes;   // totalCost * 0.62
 const chain = [];
-if(locMult!==1) chain.push({label:`Location (${locLabel})`, mult:locMult, carbon:0});
+if(locMult!==1) chain.push({label:`Location (${locLabel})`, mult:locMult, carbon:0, qTitle:"Location"});
 chain.push(...hardAdjust);
 
 let hardCosts = hardBase;
 const adjRows = [];
 chain.forEach(adj=>{
   const delta = hardCosts * (adj.mult - 1);
-  adjRows.push({label:adj.label, mult:adj.mult, delta:delta});
-  drivers.push({name:adj.label, cost:delta, carbon:adj.carbon||0});
+  adjRows.push({label:adj.label, mult:adj.mult, delta:delta, qTitle:adj.qTitle});
+  drivers.push({name:adj.label, cost:delta, carbon:adj.carbon||0, qTitle:adj.qTitle});
   hardCosts += delta;
 });
 const hardAdjustTotal = hardCosts - hardBase;
 
 // Financing is a percentage of the adjusted pre-fee project cost.
 const financing = financePct * (totalCost + hardAdjustTotal);
-if(financing!==0) drivers.push({name:"Financing", cost:financing, carbon:0});
+if(financing!==0) drivers.push({name:"Financing", cost:financing, carbon:0, qTitle:"Financing"});
 
 // Contractor fee applies to hard construction costs (after adjustments).
 const contractorFee = hardCosts * feePct;
 
 const grandTotal = totalCost + hardAdjustTotal + financing + contractorFee;
+
+// Cost breakdown rows, each with the same category value for the all-defaults
+// baseline home (baseCost, medium size, no adjustments, 0% financing, 15% fee)
+// so a "Difference from Baseline" column can be shown, and a question to link
+// back to. Proportional categories are a fixed share of the subtotal — see the
+// note under the table.
+const B = baseCost;
+const breakdownRows = [
+  {label:"Land & Acquisition",            amount:land,      base:B*.18, q:"Land Cost"},
+  {label:"Site Work & Utilities",         amount:site,      base:B*.08, q:"Site Difficulty"},
+  {label:"Structure",                     amount:structure, base:B*.25, q:"Structure"},
+  {label:"Mechanical Systems",            amount:systems,   base:B*.09, q:"HVAC"},
+  {label:"Finishes",                      amount:finishes,  base:B*.20, q:"Interior Finishes"},
+  {label:"Soft Costs (design, permitting)",amount:soft,     base:B*.12, q:"Design Complexity"}
+];
+adjRows.forEach(r=>breakdownRows.push({
+  label:`${r.label} — ${r.mult.toFixed(2)}× on hard costs`, amount:r.delta, base:0, q:r.qTitle}));
+breakdownRows.push({label:`Financing (${Math.round(financePct*100)}% of project cost)`,
+  amount:financing, base:0, q:"Financing"});
+breakdownRows.push({label:`Contractor Fee (${Math.round(feePct*100)}% of hard costs)`,
+  amount:contractorFee, base:B*.62*CONTRACTOR_FEE_DEFAULT, q:"Contractor Fee"});
 
 document.getElementById("results").classList.remove("hidden");
 
@@ -1379,11 +1434,48 @@ affect indoor air quality.
 </p>
 </div>
 
+<h3>Estimated Cost Breakdown</h3>
+
+<div style="overflow-x:auto">
+<table>
+<tr><th>Category</th><th>Estimate</th><th>Difference from Baseline</th><th></th></tr>
+${breakdownRows.map(r=>{
+  const diff=r.amount-r.base;
+  const diffStr = Math.round(diff)===0 ? "—"
+    : `<span class="${diff<0?"diff-down":"diff-up"}">${diff>=0?"+":"−"}$${Math.round(Math.abs(diff)).toLocaleString()}</span>`;
+  return `<tr><td>${r.label}</td><td>$${Math.round(r.amount).toLocaleString()}</td><td>${diffStr}</td><td>${editLink(r.q)}</td></tr>`;
+}).join("")}
+</table>
+</div>
+
+<p class="small">
+"Difference from Baseline" compares each line to an all-baseline home (medium
+size, every default option). The main category rows are an illustrative
+proportional split of the subtotal, so they all shift together as the total
+changes — see "What Changed Your Results?" below for the impact of each
+individual decision. The contractor fee is charged on
+<strong>hard costs</strong> (site work, structure, mechanical systems,
+finishes) — not land, soft costs, or financing.
+</p>
+
+<h3>What Changed Your Results?</h3>
+
+<div style="overflow-x:auto">
+<table>
+<tr><th>Decision</th><th>Cost Impact</th><th>Carbon Impact</th><th></th></tr>
+${drivers
+.filter(d=>Math.round(d.cost)!==0 || Math.round(d.carbon)!==0)
+.map(d=>
+`<tr><td>${d.name}</td><td>${d.cost>=0?"+":"−"}$${Math.round(Math.abs(d.cost)).toLocaleString()}</td><td>${d.carbon>=0?"+":"−"}${Math.abs(Math.round(d.carbon))}</td><td>${editLink(d.qTitle)}</td></tr>`
+).join("")}
+</table>
+</div>
+
 <h3>Top Cost Drivers</h3>
 
 <ul>
 ${topCost.map(x =>
-`<li>${x.name} (${x.cost >=0 ? "+" : ""}$${Math.round(x.cost).toLocaleString()})</li>`
+`<li>${x.name} (${x.cost >=0 ? "+" : "−"}$${Math.round(Math.abs(x.cost)).toLocaleString()})</li>`
 ).join("")}
 </ul>
 
@@ -1391,48 +1483,8 @@ ${topCost.map(x =>
 
 <ul>
 ${topCarbon.map(x =>
-`<li>${x.name} (${x.carbon >=0 ? "+" : ""}${Math.round(x.carbon)})</li>`
+`<li>${x.name} (${x.carbon >=0 ? "+" : "−"}${Math.abs(Math.round(x.carbon))})</li>`
 ).join("")}
-</ul>
-
-<h3>Estimated Cost Breakdown</h3>
-
-<table>
-<tr><th>Category</th><th>Estimate</th></tr>
-<tr><td>Land & Acquisition</td><td>$${Math.round(land).toLocaleString()}</td></tr>
-<tr><td>Site Work & Utilities</td><td>$${Math.round(site).toLocaleString()}</td></tr>
-<tr><td>Structure</td><td>$${Math.round(structure).toLocaleString()}</td></tr>
-<tr><td>Mechanical Systems</td><td>$${Math.round(systems).toLocaleString()}</td></tr>
-<tr><td>Finishes</td><td>$${Math.round(finishes).toLocaleString()}</td></tr>
-<tr><td>Soft Costs (design, permitting)</td><td>$${Math.round(soft).toLocaleString()}</td></tr>
-${adjRows.map(r=>
-`<tr><td>${r.label} — ${r.mult.toFixed(2)}× on hard costs</td><td>${r.delta>=0?"+":"−"}$${Math.round(Math.abs(r.delta)).toLocaleString()}</td></tr>`
-).join("")}
-<tr><td>Financing (${Math.round(financePct*100)}% of project cost)</td><td>$${Math.round(financing).toLocaleString()}</td></tr>
-<tr><td>Contractor Fee (${Math.round(feePct*100)}% of hard costs)</td><td>$${Math.round(contractorFee).toLocaleString()}</td></tr>
-</table>
-
-<p class="small">
-The contractor fee (general contractor overhead + profit) is charged on
-<strong>hard costs</strong> — the physical cost of building: site work,
-structure, mechanical systems, and finishes. It is not charged on land,
-soft costs, or financing.
-</p>
-
-<h3>What Changed Your Results?</h3>
-
-<ul>
-${drivers
-.filter(d=>Math.round(d.cost)!==0 || Math.round(d.carbon)!==0)
-.map(d=>`
-<li>
-<strong>${d.name}</strong><br>
-Cost Impact: ${d.cost>=0?"+":""}$${Math.round(d.cost).toLocaleString()}
-&nbsp;&nbsp;|&nbsp;&nbsp;
-Carbon Impact: ${d.carbon>=0?"+":""}${Math.round(d.carbon)}
-</li>
-`)
-.join("")}
 </ul>
 
 <hr>
@@ -1446,19 +1498,20 @@ design details, market conditions, contractor pricing, and material selections.
 `;
 
 // Results are no longer a dead end: edit keeps all answers, restart clears.
-document.getElementById("editBtn").onclick=()=>{
-  // After normal completion `current` is one past the last question.
-  current=Math.min(current, questions.length-1);
-  document.getElementById("results").classList.add("hidden");
-  document.getElementById("wizard").style.display="";
-  renderQuestion();
-};
+// After normal completion `current` is one past the last question.
+document.getElementById("editBtn").onclick=()=>
+  goToQuestion(Math.min(current, questions.length-1));
 document.getElementById("restartBtn").onclick=()=>{
   answers=[];
-  current=0;
-  document.getElementById("results").classList.add("hidden");
-  document.getElementById("wizard").style.display="";
-  renderQuestion();
+  goToQuestion(0);
+};
+
+// Delegated handler for the per-row "edit" links in the results tables.
+document.getElementById("results").onclick=(e)=>{
+  const el=e.target.closest("[data-goto]");
+  if(!el) return;
+  e.preventDefault();
+  goToQuestion(parseInt(el.dataset.goto,10));
 };
 
 }
