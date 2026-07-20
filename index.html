@@ -120,6 +120,16 @@ button.linklike:hover{
     margin-bottom:12px;
 }
 
+/* semantic colors for environmental impact (separate from the indigo accent) */
+.good{ color:#15803d; }        /* energy saved / offset / net-positive */
+.good-strong{
+    color:#15803d;
+    background:#dcfce7;
+    padding:2px 8px;
+    border-radius:6px;
+    font-weight:bold;
+}
+
 table{
     width:100%;
     border-collapse:collapse;
@@ -1341,8 +1351,9 @@ Higher values indicate more material-related emissions than the baseline home.
 </p>
 <p>
 Estimated net annual energy use:
-<strong>${Math.round(netEnergy).toLocaleString()} kWh/yr</strong>
-${netEnergy<0 ? " — net positive: surplus exported to the grid" : ""}
+<span class="${netEnergy<=0 ? "good-strong" : ""}"><strong>${Math.round(netEnergy).toLocaleString()} kWh/yr</strong></span>
+${netEnergy<0 ? ` <span class="good">— net positive: ${Math.round(-netEnergy).toLocaleString()} kWh/yr surplus exported to the grid 🌱</span>`
+  : netEnergy===0 ? ` <span class="good">— net zero 🌱</span>` : ""}
 </p>
 <p class="small">
 The math, using your numbers:<br>
@@ -1353,15 +1364,15 @@ Gross use = ${Math.round(totalSqft).toLocaleString()} sq ft
 = <strong>${Math.round(grossEnergy).toLocaleString()} kWh/yr</strong><br>
 Solar offset = ${Math.round(grossEnergy).toLocaleString()}
 × ${Math.round(solarOffsetFrac*100)}%
-= <strong>−${Math.round(solarOffset).toLocaleString()} kWh/yr</strong><br>
-Net = <strong>${Math.round(netEnergy).toLocaleString()} kWh/yr</strong>
+= <strong class="${solarOffset>0 ? "good" : ""}">−${Math.round(solarOffset).toLocaleString()} kWh/yr</strong><br>
+Net = <strong class="${netEnergy<=0 ? "good" : ""}">${Math.round(netEnergy).toLocaleString()} kWh/yr</strong>
 </p>
 <p class="small">
 Definition: Rough educational estimate. Energy use scales with floor area and
 conditioned volume (taller ceilings increase the space that must be heated and
 cooled). The efficiency factor comes from your insulation, HVAC, and window
 choices${energyMult!==1 ? ` — netting to
-<strong>${Math.round((energyMult-1)*100)>0?"+":"−"}${Math.abs(Math.round((energyMult-1)*100))}%</strong>
+<strong class="${energyMult<1?"good":""}">${Math.round((energyMult-1)*100)>0?"+":"−"}${Math.abs(Math.round((energyMult-1)*100))}%</strong>
 vs. a code-baseline home of the same size` : ""}; solar then offsets a share of
 gross use. Air sealing matters alongside insulation — leaks waste energy and
 affect indoor air quality.
