@@ -106,6 +106,13 @@ button.linklike:hover{
     line-height:1.4em;
 }
 
+/* Reserve space for the question description so the Back/Next row (which sits
+   above the options) lands at the same vertical spot on every step — letting
+   users click Next repeatedly without moving the pointer. */
+#questionDescription{
+    min-height:4.2em;
+}
+
 .metric{
     background:#f1f5f9;
     padding:16px;
@@ -322,12 +329,12 @@ shortcuts on the first step to preview a finished results page.
 
 <p class="small" id="questionDescription"></p>
 
-<div id="options"></div>
-
 <div class="nav">
 <button id="backBtn" class="secondary" disabled>Back</button>
 <button id="nextBtn" disabled>Next</button>
 </div>
+
+<div id="options"></div>
 
 <div id="devSkip">
 <button id="skipBtn" class="linklike">Skip to results with defaults →</button>
