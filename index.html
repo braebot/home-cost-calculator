@@ -619,9 +619,9 @@ title:"Detached Garage",
 desc:"A separate, unattached garage structure. Attached garage bays are counted with the home in the sizing step.",
 choices:[
 {label:"None", cost:0, carbon:0},
-{label:"1-car (~300 sq ft)", cost:75000, carbon:6},
-{label:"2-car (~600 sq ft)", cost:140000, carbon:12},
-{label:"3-car (~900 sq ft)", cost:200000, carbon:18}
+{label:"1-car (~300 sq ft)", cost:75000, carbon:6, sqft:300},
+{label:"2-car (~600 sq ft)", cost:140000, carbon:12, sqft:600},
+{label:"3-car (~900 sq ft)", cost:200000, carbon:18, sqft:900}
 ]
 },
 
@@ -904,6 +904,8 @@ function choiceImpactLabel(choice){
 const parts=[];
 const cost=choice.cost||0;
 if(cost!==0) parts.push((cost>0?"+":"−")+"$"+Math.abs(cost).toLocaleString());
+if(choice.sqft && cost!==0)
+  parts.push("~$"+Math.round(Math.abs(cost)/choice.sqft).toLocaleString()+"/sq ft");
 if(choice.hardMult!=null && choice.hardMult!==1)
   parts.push("×"+choice.hardMult.toFixed(2)+" on hard costs");
 if(choice.projectPct!=null && choice.projectPct!==0)
