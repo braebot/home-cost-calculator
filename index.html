@@ -29,7 +29,52 @@
     --progress-track:#e8e1d9;
     --good:#2f7d32;
     --good-bg:#e0f0d2;
+    --hover-bg:#f2f6ec;
+    --card-edge:transparent;
     --font:"Helvetica Neue","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+}
+
+/* Dark theme — a deep warm-brown ground with a brighter forest green so the
+   accent still reads. Applied on OS preference unless the viewer forces light;
+   the explicit data-theme toggle (stamped on <html> by the artifact viewer)
+   wins in both directions. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1b1512;
+    --card:#241c17;
+    --ink:#efe7db;
+    --ink-soft:#b6a597;
+    --accent:#8cbf6a;
+    --accent-hover:#9ccb7a;
+    --accent-ink:#1a140f;
+    --accent-tint:#26311f;
+    --accent-border:#4c6640;
+    --border:#3a2e26;
+    --border-soft:#322620;
+    --progress-track:#3a2e26;
+    --good:#7bd88a;
+    --good-bg:#24331f;
+    --hover-bg:#26301d;
+    --card-edge:#33271f;
+  }
+}
+:root[data-theme="dark"]{
+    --bg:#1b1512;
+    --card:#241c17;
+    --ink:#efe7db;
+    --ink-soft:#b6a597;
+    --accent:#8cbf6a;
+    --accent-hover:#9ccb7a;
+    --accent-ink:#1a140f;
+    --accent-tint:#26311f;
+    --accent-border:#4c6640;
+    --border:#3a2e26;
+    --border-soft:#322620;
+    --progress-track:#3a2e26;
+    --good:#7bd88a;
+    --good-bg:#24331f;
+    --hover-bg:#26301d;
+    --card-edge:#33271f;
 }
 
 body{
@@ -43,6 +88,7 @@ body{
 
 .card{
     background:var(--card);
+    border:1px solid var(--card-edge);
     border-radius:12px;
     padding:30px;
     box-shadow:0 2px 14px rgba(64,43,35,.10);
@@ -82,7 +128,7 @@ a{ color:var(--accent); }
 }
 
 .option:hover{
-    background:#f2f6ec;
+    background:var(--hover-bg);
     border-color:var(--accent-border);
 }
 
@@ -288,6 +334,7 @@ input[type="number"]{
     font-size:1em;
     font-family:var(--font);
     color:var(--ink);
+    background:var(--card);
 }
 
 select{
