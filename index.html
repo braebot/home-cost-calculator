@@ -73,7 +73,8 @@ button:disabled{
 .nav{
     display:flex;
     gap:10px;
-    margin-top:10px;
+    margin-top:4px;
+    margin-bottom:22px;
 }
 
 button.secondary{
@@ -106,11 +107,13 @@ button.linklike:hover{
     line-height:1.4em;
 }
 
-/* Reserve space for the question description so the Back/Next row (which sits
-   above the options) lands at the same vertical spot on every step — letting
-   users click Next repeatedly without moving the pointer. */
+/* Reserve a little space for the question description so the Back/Next row
+   (which sits just above the options) stays close to the same vertical spot
+   from step to step — letting users click Next repeatedly without chasing the
+   button — without leaving a big empty gap on short descriptions. */
 #questionDescription{
-    min-height:4.2em;
+    min-height:2.6em;
+    margin:6px 0 2px;
 }
 
 .metric{
