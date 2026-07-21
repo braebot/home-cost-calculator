@@ -839,7 +839,8 @@ qDesc.innerText = q.desc;
 
 optionsDiv.innerHTML="";
 nextBtn.disabled=true;
-backBtn.disabled = (current===0);
+// Back is always available: on step 1 it returns to the primer/intro screen.
+backBtn.disabled = false;
 document.getElementById("devSkip").style.display = (current===0) ? "block" : "none";
 renderReferences(q);
 
@@ -1260,6 +1261,10 @@ backBtn.onclick=()=>{
 if(current>0){
   current--;
   renderQuestion();
+}else{
+  // On the first question, Back returns to the primer/intro screen.
+  document.getElementById("wizard").style.display="none";
+  document.getElementById("primer").style.display="";
 }
 };
 
