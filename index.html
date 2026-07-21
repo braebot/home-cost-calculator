@@ -478,6 +478,7 @@ shortcuts on the first step to preview a finished results page.
 <div class="nav">
 <button id="backBtn" class="secondary" disabled>Back</button>
 <button id="nextBtn" disabled>Next</button>
+<button id="toResultsBtn" class="secondary" style="margin-left:auto; display:none">View results →</button>
 </div>
 
 <div id="options"></div>
@@ -835,6 +836,7 @@ choices:[
 
 let current = 0;
 let answers = [];
+let seenResults = false;   // true once the results page has been reached
 
 const baseCost = 1200000;
 const baseCarbon = 100;
@@ -844,6 +846,7 @@ const qDesc = document.getElementById("questionDescription");
 const optionsDiv = document.getElementById("options");
 const nextBtn = document.getElementById("nextBtn");
 const backBtn = document.getElementById("backBtn");
+const toResultsBtn = document.getElementById("toResultsBtn");
 
 function renderQuestion(){
 
@@ -860,6 +863,8 @@ nextBtn.disabled=true;
 // Back is always available: on step 1 it returns to the primer/intro screen.
 backBtn.disabled = false;
 document.getElementById("devSkip").style.display = (current===0) ? "block" : "none";
+// Jump-to-results shortcut appears only after the user has completed the wizard.
+toResultsBtn.style.display = seenResults ? "" : "none";
 renderReferences(q);
 
 if(q.type==="choice"){
@@ -1294,6 +1299,9 @@ if(current>0){
 }
 };
 
+// After completing once, any step can jump straight back to the results.
+toResultsBtn.onclick=()=>showResults();
+
 /* Jump from the results page back to a specific question (used by the "edit"
    links in the breakdown / decision tables). */
 function goToQuestion(idx){
@@ -1355,6 +1363,7 @@ document.getElementById("skipMaxBtn").onclick=()=>fillAnswers("max");
 
 function showResults(){
 
+seenResults = true;
 document.getElementById("wizard").style.display="none";
 
 let totalCost=baseCost;
@@ -1641,6 +1650,7 @@ document.getElementById("editBtn").onclick=()=>
   goToQuestion(Math.min(current, questions.length-1));
 document.getElementById("restartBtn").onclick=()=>{
   answers=[];
+  seenResults=false;
   goToQuestion(0);
 };
 
