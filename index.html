@@ -903,9 +903,13 @@ nextBtn.disabled = (state.index==null);
 function choiceImpactLabel(choice){
 const parts=[];
 const cost=choice.cost||0;
-if(cost!==0) parts.push((cost>0?"+":"−")+"$"+Math.abs(cost).toLocaleString());
-if(choice.sqft && cost!==0)
-  parts.push("~$"+Math.round(Math.abs(cost)/choice.sqft).toLocaleString()+"/sq ft");
+if(cost!==0){
+  // Per-sq-ft in parens right after the dollar amount, matching the format
+  // the Home Size buckets use.
+  let c=(cost>0?"+":"−")+"$"+Math.abs(cost).toLocaleString();
+  if(choice.sqft) c+=" (~$"+Math.round(Math.abs(cost)/choice.sqft).toLocaleString()+"/sq ft)";
+  parts.push(c);
+}
 if(choice.hardMult!=null && choice.hardMult!==1)
   parts.push("×"+choice.hardMult.toFixed(2)+" on hard costs");
 if(choice.projectPct!=null && choice.projectPct!==0)
