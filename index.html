@@ -6,29 +6,59 @@
 <title>Custom Home Cost & Carbon Explorer</title>
 
 <style>
+/* ------------------------------------------------------------------
+   Palette adapted from Hearth Design Build (hearthdesignbuild.org):
+   warm dark-brown ink, forest-green accent, pale spring-green + warm
+   cream tints. A deliberately single, light, natural theme to match
+   the brand. Their display fonts (nudista-web / halyard-display) are
+   proprietary Adobe Typekit faces the artifact CSP can't load, so we
+   approximate with a clean geometric system-sans stack.
+------------------------------------------------------------------- */
+:root{
+    --bg:#f7f3ed;
+    --card:#ffffff;
+    --ink:#402b23;
+    --ink-soft:#7a6558;
+    --accent:#2d4020;
+    --accent-hover:#223018;
+    --accent-ink:#ffffff;
+    --accent-tint:#e6f2da;
+    --accent-border:#b2d49b;
+    --border:#e8e1d9;
+    --border-soft:#efe9e1;
+    --progress-track:#e8e1d9;
+    --good:#2f7d32;
+    --good-bg:#e0f0d2;
+    --font:"Helvetica Neue","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+}
+
 body{
-    font-family: Arial, sans-serif;
+    font-family:var(--font);
     max-width:900px;
     margin:40px auto;
     padding:20px;
-    color:#222;
-    background:#f7f8fa;
+    color:var(--ink);
+    background:var(--bg);
 }
 
 .card{
-    background:white;
+    background:var(--card);
     border-radius:12px;
     padding:30px;
-    box-shadow:0 2px 10px rgba(0,0,0,.08);
+    box-shadow:0 2px 14px rgba(64,43,35,.10);
 }
 
 h1,h2,h3{
     margin-top:0;
+    color:var(--accent);
+    letter-spacing:.2px;
 }
+
+a{ color:var(--accent); }
 
 .progress-container{
     width:100%;
-    background:#e5e5e5;
+    background:var(--progress-track);
     height:14px;
     border-radius:10px;
     margin-bottom:25px;
@@ -36,7 +66,7 @@ h1,h2,h3{
 
 .progress{
     height:14px;
-    background:#4f46e5;
+    background:var(--accent);
     border-radius:10px;
     width:0%;
     transition:.3s;
@@ -44,7 +74,7 @@ h1,h2,h3{
 
 .option{
     display:block;
-    border:1px solid #ddd;
+    border:1px solid var(--border);
     padding:14px;
     margin-bottom:12px;
     border-radius:8px;
@@ -52,22 +82,31 @@ h1,h2,h3{
 }
 
 .option:hover{
-    background:#f4f4f4;
+    background:#f2f6ec;
+    border-color:var(--accent-border);
 }
 
 button{
-    background:#4f46e5;
-    color:white;
+    background:var(--accent);
+    color:var(--accent-ink);
     border:none;
     padding:12px 18px;
     border-radius:8px;
     cursor:pointer;
     margin-top:10px;
+    font-family:var(--font);
 }
+
+button:hover{ background:var(--accent-hover); }
 
 button:disabled{
     opacity:.5;
     cursor:default;
+}
+
+button:focus-visible, a:focus-visible{
+    outline:2px solid var(--accent-border);
+    outline-offset:2px;
 }
 
 .nav{
@@ -78,10 +117,12 @@ button:disabled{
 }
 
 button.secondary{
-    background:white;
-    color:#4f46e5;
-    border:1px solid #4f46e5;
+    background:var(--card);
+    color:var(--accent);
+    border:1px solid var(--accent);
 }
+
+button.secondary:hover{ background:var(--accent-tint); }
 
 #devSkip{
     margin-top:16px;
@@ -90,7 +131,7 @@ button.secondary{
 button.linklike{
     background:none;
     border:none;
-    color:#888;
+    color:var(--ink-soft);
     font-size:.85em;
     padding:4px 0;
     text-decoration:underline;
@@ -98,11 +139,12 @@ button.linklike{
 }
 
 button.linklike:hover{
-    color:#4f46e5;
+    color:var(--accent);
+    background:none;
 }
 
 .small{
-    color:#666;
+    color:var(--ink-soft);
     font-size:.95em;
     line-height:1.4em;
 }
@@ -117,17 +159,17 @@ button.linklike:hover{
 }
 
 .metric{
-    background:#f1f5f9;
+    background:var(--accent-tint);
     padding:16px;
     border-radius:8px;
     margin-bottom:12px;
 }
 
-/* semantic colors for environmental impact (separate from the indigo accent) */
-.good{ color:#15803d; }        /* energy saved / offset / net-positive */
+/* semantic color for positive environmental impact */
+.good{ color:var(--good); }
 .good-strong{
-    color:#15803d;
-    background:#dcfce7;
+    color:var(--good);
+    background:var(--good-bg);
     padding:2px 8px;
     border-radius:6px;
     font-weight:bold;
@@ -140,7 +182,7 @@ table{
 
 td,th{
     padding:8px;
-    border-bottom:1px solid #ddd;
+    border-bottom:1px solid var(--border);
     text-align:left;
 }
 
@@ -150,7 +192,7 @@ th:nth-child(n+2), td:nth-child(n+2){
 }
 
 a.editlink{
-    color:#4f46e5;
+    color:var(--accent);
     font-size:.85em;
     text-decoration:none;
     white-space:nowrap;
@@ -158,8 +200,8 @@ a.editlink{
 
 a.editlink:hover{ text-decoration:underline; }
 
-td .diff-down{ color:#15803d; }   /* below baseline (cheaper) */
-td .diff-up{ color:#666; }        /* above baseline */
+td .diff-down{ color:var(--good); }   /* below baseline (cheaper) */
+td .diff-up{ color:var(--ink-soft); } /* above baseline */
 
 .hidden{
     display:none;
@@ -179,19 +221,19 @@ ul{
 .branch-toggle .tab{
     flex:1;
     text-align:center;
-    border:1px solid #ddd;
+    border:1px solid var(--border);
     padding:12px;
     border-radius:8px;
     cursor:pointer;
     margin-top:0;
-    background:white;
-    color:#222;
+    background:var(--card);
+    color:var(--ink);
 }
 
 .branch-toggle .tab.active{
-    border-color:#4f46e5;
-    background:#eef0ff;
-    color:#4f46e5;
+    border-color:var(--accent-border);
+    background:var(--accent-tint);
+    color:var(--accent);
     font-weight:bold;
 }
 
@@ -199,7 +241,7 @@ ul{
     display:flex;
     align-items:center;
     justify-content:space-between;
-    border-bottom:1px solid #eee;
+    border-bottom:1px solid var(--border-soft);
     padding:10px 0;
     flex-wrap:wrap;
     gap:8px;
@@ -210,14 +252,14 @@ ul{
 }
 
 .room-row .room-rate{
-    color:#666;
+    color:var(--ink-soft);
     font-size:.9em;
     font-weight:normal;
 }
 
 /* optional explanatory line under a choice option's label */
 .option-note{
-    color:#666;
+    color:var(--ink-soft);
     font-size:.85em;
     font-weight:normal;
     line-height:1.4em;
@@ -235,23 +277,34 @@ ul{
     display:flex;
     flex-direction:column;
     font-size:.8em;
-    color:#666;
+    color:var(--ink-soft);
 }
 
 input[type="number"]{
     width:90px;
     padding:8px;
-    border:1px solid #ccc;
+    border:1px solid var(--border);
     border-radius:6px;
     font-size:1em;
+    font-family:var(--font);
+    color:var(--ink);
 }
 
 select{
     padding:8px;
-    border:1px solid #ccc;
+    border:1px solid var(--border);
     border-radius:6px;
     font-size:1em;
     max-width:100%;
+    font-family:var(--font);
+    color:var(--ink);
+    background:var(--card);
+}
+
+input[type="number"]:focus, select:focus{
+    outline:2px solid var(--accent-border);
+    outline-offset:1px;
+    border-color:var(--accent);
 }
 
 .count-input{
@@ -259,7 +312,7 @@ select{
 }
 
 .running-total{
-    background:#eef0ff;
+    background:var(--accent-tint);
     padding:12px 16px;
     border-radius:8px;
     margin-top:16px;
@@ -272,13 +325,13 @@ select{
 }
 
 details.refs{
-    border-top:1px solid #eee;
+    border-top:1px solid var(--border);
     padding-top:12px;
 }
 
 details.refs summary{
     cursor:pointer;
-    color:#4f46e5;
+    color:var(--accent);
     font-size:.9em;
     list-style:none;
 }
@@ -301,7 +354,11 @@ details.refs ul{
 }
 
 details.refs a{
-    color:#4f46e5;
+    color:var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce){
+    .progress{ transition:none; }
 }
 </style>
 </head>
