@@ -1021,8 +1021,10 @@ q.choices.forEach((choice,index)=>{
   // grows (economies of scale: fixed costs spread over more area).
   const construction = REF.cost + choice.cost;
   const perSqft = Math.round(construction / choice.repSqft);
+  const carbonStr = choice.carbon!==0
+    ? ` · ${choice.carbon>0?"+":"−"}${Math.abs(choice.carbon)} carbon` : "";
   div.innerHTML=`<input type="radio" name="answer" value="${index}" ${checked}> ${choice.label}
-    <span class="room-rate"> — construction ≈ $${Math.round(construction).toLocaleString()} (~$${perSqft.toLocaleString()}/sq ft)</span>`;
+    <span class="room-rate"> — construction ≈ $${Math.round(construction).toLocaleString()} (~$${perSqft.toLocaleString()}/sq ft)${carbonStr}</span>`;
   div.onclick=()=>{
     state.choiceIndex=index;
     nextBtn.disabled=false;
